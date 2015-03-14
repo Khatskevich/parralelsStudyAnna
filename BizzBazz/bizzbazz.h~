@@ -1,0 +1,24 @@
+#ifndef _BIZZ_BAZZ_H_
+#define _BIZZ_BAZZ_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h> 
+#include <limits.h>
+
+struct bb_info{
+    char* temp_string;
+    char separators[257];
+    char last_separator;
+    int temp_string_len;
+    int temp_string_max_len;
+    ssize_t (*write)(char*, size_t);
+};
+
+struct bb_info* bb_create( char* separators_ , ssize_t (*default_write)(char*, size_t) );
+int bb_give_byte( char byte, struct bb_info* info);
+
+
+#endif //_BIZZ_BAZZ_H_
+

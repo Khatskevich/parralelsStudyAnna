@@ -1,0 +1,17 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+int main()
+{
+	int* arr2;
+int i;
+	arr2 = (int*)malloc(sizeof(int));
+	arr2[0] = 6;
+	int arr1[] = { 5, 8 , 3 , 0, 1, 9};
+	sort(arr1, arr2);
+	for (i = 0; i < arr2[0]; i++)
+	{
+		printf("%d ", arr1[i]);
+	}
+	return 0;
+}
