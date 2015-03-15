@@ -35,7 +35,4 @@ typedef struct
     pthread_t writerThreadId;
 } LOGMAININFO;
 
-
-int logInit(unsigned logLevel, const char * filename);
-
 #endif // _ARCHIVATOR_LOG_

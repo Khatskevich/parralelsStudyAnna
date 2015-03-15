@@ -1,0 +1,4 @@
+PROGPATH=..
+INCLUDES=$(PROGPATH)/include
+log_test: $(INCLUDES)/log.h $(PROGPATH)/log/log.c log_test.c
+	$(CC) log_test.c $(PROGPATH)/log/log.c -pthread -I$(INCLUDES)

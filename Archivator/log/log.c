@@ -1,6 +1,3 @@
-#define DEBUG
-#include "log.h"
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -9,6 +6,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 
+#include "log.h"
 
 LOGMAININFO logMainInfo;
 
@@ -74,12 +72,6 @@ int logMesg( char* group, int priority ,const char* str,...)
     len_mesg = vsnprintf( buf+len_group, MAX_MESG_SIZE-len_group-1 , str ,argptr);
     len = write( logMainInfo.writeBufDes, buf, len_group + len_mesg);
     if ( len != len_group + len_mesg );
-    return 0;
-}
-
-int main(){
-    logInit(5, NULL);
-    LOGMESG(5,"%d, %d\n", 5, 74);
     return 0;
 }
 
