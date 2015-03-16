@@ -7,7 +7,7 @@
 #define LOGMESG(a, ...) logMesg( LOG_GROUP, a, ##__VA_ARGS__ )
 #else
 #define LOG_GROUP ""
-#define LOGMESG(a) do{printf("23");}while(0)
+#define LOGMESG(a) do{}while(0)
 #endif //DEBUG
 
 #include <pthread.h>
@@ -27,6 +27,7 @@ enum LOGLEVELS{
 
 typedef struct
 {
+    int isStarted ;
     int logDes;
     unsigned flags;
     int logLevel;
@@ -37,5 +38,7 @@ typedef struct
 
 
 int logInit(unsigned logLevel, const char * filename);
+
+int logMesg( char* group, int priority ,const char* str,...);
 
 #endif // _ARCHIVATOR_LOG_

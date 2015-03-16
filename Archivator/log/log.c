@@ -8,23 +8,19 @@
 
 #include "log.h"
 
-LOGMAININFO logMainInfo;
+LOGMAININFO logMainInfo = {.isStarted = 0};
 
-void * threadWriter( void* param){
-    char buf[WRITER_ATOM_SIZE];
-    ssize_t len;
-    ssize_t writtenlen;
-    while( len = read( logMainInfo.readBufDes, buf, WRITER_ATOM_SIZE )){
-        writtenlen = write( logMainInfo.logDes, buf, len );
-        if( writtenlen != len );
-    }
-}
+void * threadWriter( void* param);
 
 int logInit(unsigned logLevel, const char * filename){
     int des;
     int rc;
     int pipefd[2];
     
+    if ( logMainInfo.isStarted == 1){ // let us guess that it is can be started in only one thread.
+            goto log_exit_0;
+    }
+    logMainInfo.isStarted = 1;
     if ( logLevel >= LOG_LEVELS_COUNT || logLevel < 0 ){
         goto log_exit_0;
     }
@@ -59,6 +55,30 @@ int logInit(unsigned logLevel, const char * filename){
     log_exit_0:
         return -1;
 }   
+
+int logClose(){
+    if ( logMainInfo.isStarted == 0)
+    {
+        return -1;
+    }
+    logMainInfo.isStarted = 0;
+    pthread_cancel( logMainInfo.readBufDes );
+    close( logMainInfo.readBufDes );
+    close( logMainInfo.writeBufDes );
+    close( logMainInfo.logDes );
+
+    return 0;
+}   
+
+void * threadWriter( void* param){
+    char buf[WRITER_ATOM_SIZE];
+    ssize_t len;
+    ssize_t writtenlen;
+    while( len = read( logMainInfo.readBufDes, buf, WRITER_ATOM_SIZE )){
+        writtenlen = write( logMainInfo.logDes, buf, len );
+        if( writtenlen != len );
+    }
+}
 
 int logMesg( char* group, int priority ,const char* str,...)
 {
