@@ -1,15 +1,16 @@
 #ifndef _ARCHIVATOR_LOG_
 #define _ARCHIVATOR_LOG_
 
+#ifndef LOG_GROUP
+#define LOG_GROUP ""
+#endif //LOG_GROUP
 
 #ifdef DEBUG
-#define LOG_GROUP ""
 #define LOGMESG(a, ...) logMesg( LOG_GROUP, a, ##__VA_ARGS__ )
 #else
-#define LOG_GROUP ""
+
 #define LOGMESG(a) do{}while(0)
 #endif //DEBUG
-
 #include <pthread.h>
 
 
