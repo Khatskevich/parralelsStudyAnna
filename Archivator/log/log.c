@@ -99,7 +99,7 @@ int logMesg( char* group, int priority ,const char* str,...)
     ssize_t len;
     va_list argptr;
     va_start(argptr, str);
-    len_group = snprintf( buf, MAX_MESG_SIZE-1, "%s", group); 
+    len_group = snprintf( buf, MAX_MESG_SIZE-1, "%s:", group); 
     len_mesg = vsnprintf( buf+len_group, MAX_MESG_SIZE-len_group-1 , str ,argptr);
     len = write( logMainInfo.writeBufDes, buf, len_group + len_mesg);
     if ( len != len_group + len_mesg );

@@ -1,5 +1,5 @@
 #define DEBUG
-#define LOG_GROUP "LOG_TEST:"
+#define LOG_GROUP "LOG_TEST"
 #include "log.h"
 #include <assert.h> 
 

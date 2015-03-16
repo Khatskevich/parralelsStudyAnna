@@ -7,7 +7,6 @@
 #include <pthread.h>
 #include <sys/ioctl.h>
 
-
 #include "log.h"
 
 LOGMAININFO logMainInfo = {.isStarted = 0};

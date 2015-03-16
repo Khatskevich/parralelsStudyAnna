@@ -2,7 +2,7 @@
 #define _ARCHIVATOR_LOG_
 
 #ifndef LOG_GROUP
-#define LOG_GROUP ""
+#define LOG_GROUP "LOG_GROUP is not specified"
 #endif //LOG_GROUP
 
 #ifdef DEBUG
