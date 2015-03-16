@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <sys/ioctl.h>
 
 #include "log.h"
 
@@ -30,7 +31,9 @@ int logInit(unsigned logLevel, const char * filename){
     } else{
         des = open(filename, O_APPEND | O_CREAT | O_WRONLY, 0666);
         if ( des == -1 )
+	{
             goto log_exit_0;
+	}
     }
     rc = pipe( pipefd );
     if ( rc == -1 ){
@@ -57,19 +60,17 @@ int logInit(unsigned logLevel, const char * filename){
 }   
 
 int logClose(){
-    if ( logMainInfo.isStarted == 0)
-    {
+    if ( logMainInfo.isStarted == 0){
         return -1;
     }
     logMainInfo.isStarted = 0;
-    pthread_cancel( logMainInfo.writerThreadId );
+    close( logMainInfo.writeBufDes );
     pthread_join(logMainInfo.writerThreadId, NULL);
     close( logMainInfo.readBufDes );
     close( logMainInfo.writeBufDes );
     if( logMainInfo.logDes != 2){ //stderr
         close( logMainInfo.logDes );
     }
-
     return 0;
 }   
 
@@ -81,6 +82,7 @@ void * threadWriter( void* param){
         writtenlen = write( logMainInfo.logDes, buf, len );
         if( writtenlen != len );
     }
+    return 0;
 }
 
 int logMesg( char* group, int priority ,const char* str,...)
@@ -89,7 +91,7 @@ int logMesg( char* group, int priority ,const char* str,...)
         return -1;
     }
     if ( priority < logMainInfo.logLevel ){
-        return -1;
+        return 0;
     }
     char buf[MAX_MESG_SIZE];
     int len_group;
@@ -101,6 +103,6 @@ int logMesg( char* group, int priority ,const char* str,...)
     len_mesg = vsnprintf( buf+len_group, MAX_MESG_SIZE-len_group-1 , str ,argptr);
     len = write( logMainInfo.writeBufDes, buf, len_group + len_mesg);
     if ( len != len_group + len_mesg );
-    return 0;
+    return len;
 }
 
