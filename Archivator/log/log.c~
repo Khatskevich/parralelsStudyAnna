@@ -55,8 +55,6 @@ int logInit(unsigned logLevel, const char * filename){
     log_exit_0:
         return -1;
 }   
- 
-
 
 int logClose(){
     if ( logMainInfo.isStarted == 0)
@@ -67,7 +65,9 @@ int logClose(){
     pthread_cancel( logMainInfo.readBufDes );
     close( logMainInfo.readBufDes );
     close( logMainInfo.writeBufDes );
-    close( logMainInfo.logDes );
+    if( logMainInfo.logDes != 2){ //stderr
+        close( logMainInfo.logDes );
+    }
 
     return 0;
 }   
@@ -83,7 +83,13 @@ void * threadWriter( void* param){
 }
 
 int logMesg( char* group, int priority ,const char* str,...)
-{
+{   
+    if ( logMainInfo.isStarted !=1 ){
+        return -1;
+    }
+    if ( priority < logMainInfo.logLevel ){
+        return -1;
+    }
     char buf[MAX_MESG_SIZE];
     int len_group;
     int len_mesg; 
