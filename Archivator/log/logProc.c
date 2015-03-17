@@ -26,11 +26,11 @@ typedef struct
     struct timeval startTime;
 } LOGMAININFO;
 
-LOGMAININFO logMainInfo = {.isStarted = 0};
+static LOGMAININFO logMainInfo = {.isStarted = 0};
+static int writerProcId;
 
 void * threadWriter( void* param);
 
-int writerProcId;
 
 int logInit(unsigned logLevel, unsigned flags, const char * filename){
     int des;
@@ -78,7 +78,7 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
         close( pipefd[1]);
         goto log_exit_1;
     }
-    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully"); 
+    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully."); 
     return 0;
 
     log_exit_2:

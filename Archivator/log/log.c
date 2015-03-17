@@ -25,7 +25,7 @@ typedef struct
     struct timeval startTime;
 } LOGMAININFO;
 
-LOGMAININFO logMainInfo = {.isStarted = 0};
+static LOGMAININFO logMainInfo = {.isStarted = 0};
 
 void * threadWriter( void* param);
 
@@ -66,7 +66,7 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
     logMainInfo.logDes = des ; 
     logMainInfo.isStarted = 1;
     gettimeofday(&logMainInfo.startTime,0);
-    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully");  
+    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully.");  
     return 0;
 
     log_exit_2:
