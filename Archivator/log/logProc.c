@@ -35,7 +35,7 @@ int writerProcId;
 int logInit(unsigned logLevel, unsigned flags, const char * filename){
     int des;
     int rc;
-    int pipefd[2];// I am using pipe as circular buffer.
+    int pipefd[2];// I am using pipe as circular buffer. It is thread safe.
     // let us guess that it is can be started in only one thread immediately.
     if ( logMainInfo.isStarted == 1){ 
             goto log_exit_0;

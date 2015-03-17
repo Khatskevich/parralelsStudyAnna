@@ -1,3 +1,5 @@
+// The same as log/logProc.c with only one difference. It uses pthread writer against separate process.
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -30,7 +32,7 @@ void * threadWriter( void* param);
 int logInit(unsigned logLevel, unsigned flags, const char * filename){
     int des;
     int rc;
-    int pipefd[2];
+    int pipefd[2];// I am using pipe as circular buffer. It is thread safe.
     
     if ( logMainInfo.isStarted == 1){ // let us guess that it is can be started in only one thread.
             goto log_exit_0;
