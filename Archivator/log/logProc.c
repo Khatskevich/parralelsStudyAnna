@@ -1,3 +1,6 @@
+// The same as log/log.c with only one difference. It uses separate process writer against pthread.
+// It is better ( I think ) in case of main program crushing.
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,7 +13,6 @@
 #include <stdlib.h>
 
 #include "log.h"
-
 
 typedef struct
 {
@@ -33,9 +35,9 @@ int writerProcId;
 int logInit(unsigned logLevel, unsigned flags, const char * filename){
     int des;
     int rc;
-    int pipefd[2];
-    
-    if ( logMainInfo.isStarted == 1){ // let us guess that it is can be started in only one thread.
+    int pipefd[2];// I am using pipe as circular buffer.
+    // let us guess that it is can be started in only one thread immediately.
+    if ( logMainInfo.isStarted == 1){ 
             goto log_exit_0;
     }
     
@@ -73,9 +75,10 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
         writerProcId = rc;
         close(logMainInfo.readBufDes);
     }else{
-        goto log_exit_2;
+        close( pipefd[1]);
+        goto log_exit_1;
     }
-    
+    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully"); 
     return 0;
 
     log_exit_2:
@@ -136,7 +139,6 @@ int logMesg( const char *fname, int lineno ,char* group, int priority ,const cha
     ssize_t len;
     va_list argptr;
     va_start(argptr, str);
-    //len_preamb = snprintf( buf, MAX_MESG_SIZE-1, "%s:", group); 
     if ( logMainInfo.flags & LOG_PRINT_TIME ){
         struct timeval t1;
         float elapsed;
@@ -154,8 +156,10 @@ int logMesg( const char *fname, int lineno ,char* group, int priority ,const cha
         len_preamb+=snprintf(  buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%d:",  lineno); 
     }
     len_mesg = vsnprintf( buf+len_preamb, MAX_MESG_SIZE-len_preamb-1 , str ,argptr);
-    len = write( logMainInfo.writeBufDes, buf, len_preamb + len_mesg);
-    if ( len != len_preamb + len_mesg );
-    return len;
+	buf[len_preamb+len_mesg] = '\n';
+    len = write( logMainInfo.writeBufDes, buf, len_preamb + len_mesg + 1);
+    if ( len != len_preamb + len_mesg + 1 );
+    return len+1;
 }
+
 

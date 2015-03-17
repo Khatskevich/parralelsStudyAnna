@@ -64,7 +64,7 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
     logMainInfo.logDes = des ; 
     logMainInfo.isStarted = 1;
     gettimeofday(&logMainInfo.startTime,0);
-    
+    logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully");  
     return 0;
 
     log_exit_2:
@@ -140,8 +140,9 @@ int logMesg( const char *fname, int lineno ,char* group, int priority ,const cha
         len_preamb+=snprintf(  buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%d:",  lineno); 
     }
     len_mesg = vsnprintf( buf+len_preamb, MAX_MESG_SIZE-len_preamb-1 , str ,argptr);
-    len = write( logMainInfo.writeBufDes, buf, len_preamb + len_mesg);
-    if ( len != len_preamb + len_mesg );
-    return len;
+	buf[len_preamb+len_mesg] = '\n';
+    len = write( logMainInfo.writeBufDes, buf, len_preamb + len_mesg + 1);
+    if ( len != len_preamb + len_mesg + 1 );
+    return len+1;
 }
 

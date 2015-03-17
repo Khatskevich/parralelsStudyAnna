@@ -1,3 +1,10 @@
+/*
+ * Log using:
+ * log creating : logInit( LOG_ALL , LOG_PRINT_TIME | LOG_PRINT_GROUP, "output_file"/NULL );
+ * logging : LOGMESG( LOG_WARN, "Valera %d", 228)
+ * log closing : logClose()
+ */
+
 #ifndef _ARCHIVATOR_LOG_
 #define _ARCHIVATOR_LOG_
 
@@ -5,16 +12,17 @@
 #define LOG_GROUP "LOG_GROUP IS NOT SPECIFIED"
 #endif //LOG_GROUP
 
+
 #ifdef DEBUG
 #define LOGMESG(a, ...) logMesg( __FILE__, __LINE__, LOG_GROUP, a, ##__VA_ARGS__ )
 #else
-
 #define LOGMESG(a) do{}while(0)
 #endif //DEBUG
+
 #include <pthread.h>
 #include <sys/time.h>
 
-#define MAX_MESG_SIZE 1024
+#define MAX_MESG_SIZE 4096
 #define WRITER_ATOM_SIZE MAX_MESG_SIZE
 
 enum LOGLEVELS{
