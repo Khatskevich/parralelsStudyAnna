@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 
 #include "log.h"
 
@@ -13,7 +14,7 @@ LOGMAININFO logMainInfo = {.isStarted = 0};
 
 void * threadWriter( void* param);
 
-int logInit(unsigned logLevel, const char * filename){
+int logInit(unsigned logLevel, unsigned flags, const char * filename){
     int des;
     int rc;
     int pipefd[2];
@@ -43,10 +44,12 @@ int logInit(unsigned logLevel, const char * filename){
     if ( rc !=0 ){
         goto log_exit_2;
     }
+    logMainInfo.flags = flags;
     logMainInfo.readBufDes = pipefd[0] ; 
     logMainInfo.writeBufDes = pipefd[1] ;
     logMainInfo.logLevel = logLevel ; 
     logMainInfo.logDes = des ; 
+    gettimeofday(&logMainInfo.startTime,0);
     
     return 0;
 
@@ -85,24 +88,46 @@ void * threadWriter( void* param){
     return 0;
 }
 
-int logMesg( char* group, int priority ,const char* str,...)
+float timedifference_msec(struct timeval t0, struct timeval t1)
+{
+    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
+}
+
+int logMesg( const char *fname, int lineno ,char* group, int priority ,const char* str,...)
 {   
-    if ( logMainInfo.isStarted !=1 ){
+    if ( logMainInfo.isStarted !=1 ){// it is ok if after chect it becomes closed immideately
         return -1;
     }
+    //
     if ( priority < logMainInfo.logLevel ){
         return 0;
     }
     char buf[MAX_MESG_SIZE];
-    int len_group;
+    int len_preamb = 0;
     int len_mesg; 
     ssize_t len;
     va_list argptr;
     va_start(argptr, str);
-    len_group = snprintf( buf, MAX_MESG_SIZE-1, "%s:", group); 
-    len_mesg = vsnprintf( buf+len_group, MAX_MESG_SIZE-len_group-1 , str ,argptr);
-    len = write( logMainInfo.writeBufDes, buf, len_group + len_mesg);
-    if ( len != len_group + len_mesg );
+    //len_preamb = snprintf( buf, MAX_MESG_SIZE-1, "%s:", group); 
+    if ( logMainInfo.flags & LOG_PRINT_TIME ){
+        struct timeval t1;
+        float elapsed;
+        gettimeofday(&t1, 0);
+        elapsed = timedifference_msec( logMainInfo.startTime, t1);
+        len_preamb+=snprintf( buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "[%0.3f]",  elapsed);
+    }
+    if ( logMainInfo.flags & LOG_PRINT_GROUP ){
+        len_preamb+=snprintf( buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%s:", group); 
+    }
+    if ( logMainInfo.flags & LOG_PRINT_FILE ){
+        len_preamb+=snprintf(  buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%s:", fname); 
+    }
+    if ( logMainInfo.flags & LOG_PRINT_LINE ){
+        len_preamb+=snprintf(  buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%d:",  lineno); 
+    }
+    len_mesg = vsnprintf( buf+len_preamb, MAX_MESG_SIZE-len_preamb-1 , str ,argptr);
+    len = write( logMainInfo.writeBufDes, buf, len_preamb + len_mesg);
+    if ( len != len_preamb + len_mesg );
     return len;
 }
 

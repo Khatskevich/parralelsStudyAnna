@@ -1,10 +1,2 @@
-LOG_TEST:5, 74
-LOG_TEST:Valera!!! 5,
-LOG_TEST:5, 74
-LOG_TEST:Valera!!! 5,
-LOG_TEST:5, 74
-LOG_TEST:Valera!!! 5,
-LOG_TEST:5, 74
-LOG_TEST:Valera!!! 5,
-LOG_TEST:5, 74
-LOG_TEST:Valera!!! 5,
+[0.000]log_test.c:5, 74
+[0.025]log_test.c:Valera!!! 5,
