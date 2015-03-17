@@ -2,7 +2,7 @@
 #define _ARCHIVATOR_LOG_
 
 #ifndef LOG_GROUP
-#define LOG_GROUP "LOG_GROUP is not specified"
+#define LOG_GROUP "LOG_GROUP IS NOT SPECIFIED"
 #endif //LOG_GROUP
 
 #ifdef DEBUG
@@ -32,19 +32,6 @@ enum LOGFLAGS{
     LOG_PRINT_FILE = 1<<2,
     LOG_PRINT_LINE = 1<<3
 };
-
-typedef struct
-{
-    int isStarted ;
-    int logDes;
-    unsigned flags;
-    int logLevel;
-    int writeBufDes;
-    int readBufDes;
-    pthread_t writerThreadId;
-    struct timeval startTime;
-} LOGMAININFO;
-
 
 int logInit(unsigned logLevel, unsigned flags, const char * filename);
 

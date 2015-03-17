@@ -10,6 +10,19 @@
 
 #include "log.h"
 
+
+typedef struct
+{
+    int isStarted ;
+    int logDes;
+    unsigned flags;
+    int logLevel;
+    int writeBufDes;
+    int readBufDes;
+    pthread_t writerThreadId;
+    struct timeval startTime;
+} LOGMAININFO;
+
 LOGMAININFO logMainInfo = {.isStarted = 0};
 
 void * threadWriter( void* param);
@@ -22,7 +35,7 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
     if ( logMainInfo.isStarted == 1){ // let us guess that it is can be started in only one thread.
             goto log_exit_0;
     }
-    logMainInfo.isStarted = 1;
+    
     if ( logLevel >= LOG_LEVELS_COUNT || logLevel < 0 ){
         goto log_exit_0;
     }
@@ -49,6 +62,7 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
     logMainInfo.writeBufDes = pipefd[1] ;
     logMainInfo.logLevel = logLevel ; 
     logMainInfo.logDes = des ; 
+    logMainInfo.isStarted = 1;
     gettimeofday(&logMainInfo.startTime,0);
     
     return 0;
@@ -70,13 +84,14 @@ int logClose(){
     close( logMainInfo.writeBufDes );
     pthread_join(logMainInfo.writerThreadId, NULL);
     close( logMainInfo.readBufDes );
-    close( logMainInfo.writeBufDes );
+    close( logMainInfo.logDes );
     if( logMainInfo.logDes != 2){ //stderr
         close( logMainInfo.logDes );
     }
     return 0;
 }   
 
+// thread which is writing data out
 void * threadWriter( void* param){
     char buf[WRITER_ATOM_SIZE];
     ssize_t len;
@@ -89,16 +104,15 @@ void * threadWriter( void* param){
 }
 
 float timedifference_msec(struct timeval t0, struct timeval t1)
-{
-    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
-}
+{    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f; }
 
+
+// main logging function
 int logMesg( const char *fname, int lineno ,char* group, int priority ,const char* str,...)
 {   
-    if ( logMainInfo.isStarted !=1 ){// it is ok if after chect it becomes closed immideately
+    if ( logMainInfo.isStarted !=1 ){// it is ok if after chect it becomes closed immediately
         return -1;
     }
-    //
     if ( priority < logMainInfo.logLevel ){
         return 0;
     }

@@ -1,0 +1,6 @@
+[0.034]LOG_TEST:log_test.c:14:5, 74
+[0.047]LOG_TEST:log_test.c:16:Valera!!! 5,
+[0.037]LOG_TEST:log_test.c:14:5, 74
+[0.049]LOG_TEST:log_test.c:16:Valera!!! 5,
+[0.000]LOG_TEST:log_test.c:14:5, 74
+[0.012]LOG_TEST:log_test.c:16:Valera!!! 5,
