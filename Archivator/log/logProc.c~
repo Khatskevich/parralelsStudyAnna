@@ -75,7 +75,8 @@ int logInit(unsigned logLevel, unsigned flags, const char * filename){
         writerProcId = rc;
         close(logMainInfo.readBufDes);
     }else{
-        goto log_exit_2;
+        close( pipefd[1]);
+        goto log_exit_1;
     }
     logMesg("log.c", __LINE__ , "LOG", LOG_INFO, "Log started successfully"); 
     return 0;

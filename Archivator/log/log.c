@@ -130,6 +130,10 @@ int logMesg( const char *fname, int lineno ,char* group, int priority ,const cha
         elapsed = timedifference_msec( logMainInfo.startTime, t1);
         len_preamb+=snprintf( buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "[%0.3f]",  elapsed);
     }
+    if ( logMainInfo.flags & LOG_PRINT_LEVEL_DESCRIPTION ){
+        len_preamb+=snprintf( buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, 
+		"%s:", LOGLEVELS_DESCRIPTIONS[priority]); 
+    }
     if ( logMainInfo.flags & LOG_PRINT_GROUP ){
         len_preamb+=snprintf( buf + len_preamb, MAX_MESG_SIZE-1-len_preamb, "%s:", group); 
     }

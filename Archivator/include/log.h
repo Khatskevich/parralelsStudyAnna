@@ -34,11 +34,20 @@ enum LOGLEVELS{
     LOG_LEVELS_COUNT
 };
 
+static char *LOGLEVELS_DESCRIPTIONS[]={
+    "ALL" , 
+    "INFO" ,
+    "WARN",
+    "ERROR",
+    "FATAL",
+};
+
 enum LOGFLAGS{
     LOG_PRINT_TIME = 1<<0,
     LOG_PRINT_GROUP = 1<<1,
     LOG_PRINT_FILE = 1<<2,
-    LOG_PRINT_LINE = 1<<3
+    LOG_PRINT_LINE = 1<<3,
+    LOG_PRINT_LEVEL_DESCRIPTION = 1<<4
 };
 
 int logInit(unsigned logLevel, unsigned flags, const char * filename);

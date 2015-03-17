@@ -1,8 +1,8 @@
 /*
  * Log using:
  * log creating : logInit( LOG_ALL , LOG_PRINT_TIME | LOG_PRINT_GROUP, "output_file"/NULL );
- * logging: LOGMESG( LOG_WARN, "Valera %d", 228)
- *
+ * logging : LOGMESG( LOG_WARN, "Valera %d", 228)
+ * log closing : logClose()
  */
 
 #ifndef _ARCHIVATOR_LOG_
@@ -34,11 +34,20 @@ enum LOGLEVELS{
     LOG_LEVELS_COUNT
 };
 
+char *LOGLEVELS_DESCRIPTIONS[]={
+    "ALL" , 
+    "INFO" ,
+    "WARN",
+    "ERROR",
+    "FATAL",
+};
+
 enum LOGFLAGS{
     LOG_PRINT_TIME = 1<<0,
     LOG_PRINT_GROUP = 1<<1,
     LOG_PRINT_FILE = 1<<2,
-    LOG_PRINT_LINE = 1<<3
+    LOG_PRINT_LINE = 1<<3,
+    LOG_PRINT_LEVEL_DESCRIPTION = 1<<4
 };
 
 int logInit(unsigned logLevel, unsigned flags, const char * filename);
