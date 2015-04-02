@@ -1,7 +1,9 @@
-#define DEBUG
+//#define DEBUG
 
 #include "log.h"
 #include "data_presentation.h"
+#include "sorted_mesg_stack.h"
+
 #include "scaner.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,19 +19,14 @@
 #include <stddef.h>
 #include <sys/mman.h>
 #include "zlib.h"
-#include <assert.h>
- 
- 
- 
- 
+#include <assert.h> 
 //#include <sys/msg.h>
 //#include <sys/ipc.h>
-
 
 #include <linux/ipc.h>
 #include <linux/msg.h>
 
-#define FORA_IN_CHUNKS 0
+#define FORA_IN_CHUNKS 14
 #define MAX_FILE_LENGTH 10000000000llu
 #define TYPE_WORKER 1 
 void* pthreadMainLoop(void*);
@@ -49,14 +46,7 @@ typedef struct{
     int workers_qid;
 } controllerMainStruct;
 
-typedef struct{
-    long controllerID;          /* Message type */
-    int compression_lvl;
-    char* data_decomp;
-    size_t size_decomp;
-    char* data_comp;
-    size_t size_comp;
-}mesgStruct;
+
 
 
 static controllerMainStruct controllerMainInfo;
@@ -115,7 +105,7 @@ int dataPresentationControllerInit(char* outFName,
     int controllerID = 0;
     int qid;
     key_t msgkey = ftok(controllerMainInfo.progname, controllerID);
-    if(( qid = msgget( msgkey, IPC_CREAT | 0666  )) == -1) {
+    if(( qid = msgget( IPC_PRIVATE, IPC_CREAT | 0666  )) == -1) {
                 LOGMESG(LOG_ERROR,"open_queue for workers");
                 goto dataPresentationControllerInit_exit_error_2;
     }
@@ -139,7 +129,10 @@ int dataPresentationControllerInit(char* outFName,
 int compressionPerform(){
     int rc;
     pthread_t writerThreadId;
-    rc = pthread_create(&writerThreadId, (void*) NULL, pthreadMainLoop, (void*) NULL);
+    int i;
+    for ( i = 0; i < 7 ; i++){
+        rc = pthread_create(&writerThreadId, (void*) NULL, pthreadMainLoop, (void*) NULL);
+    }
     int ID = 2;
     controllerCompress((void*) &ID);
     LOGMESG(LOG_INFO, "Closing messages");
@@ -161,6 +154,7 @@ int threadDoCompression(){
     }
     LOGMESG(LOG_INFO, "Compressing %d bytes for controller %d", (int) mesgInfo.size_decomp, mesgInfo.controllerID );
     compressChunk(&mesgInfo);
+    LOGMESG(LOG_INFO, "Recieved number in worker %lld, size comp = %d ", (long long int) mesgInfo.number, (int) mesgInfo.size_comp  );
     mesgInfo.controllerID = 2; //?????????
     giveInfoMesg(&mesgInfo); // controller must free this memory
     return 0;
@@ -207,32 +201,54 @@ int compressFileByChunks(int controllerID, char* nextFileName){
     size_t received = 0;
     size_t next_receiving = 0;
     size_t number_of_cicles = 0;
-    while ( received*CHUNK < length ){
+    mesgStack * stack = mesgStackInit();
+    while ( next_receiving*CHUNK < length ){
         if ( sended*CHUNK < length){
             mesgStruct mesgInfo;
             mesgInfo.size_decomp = (length - sended*CHUNK < CHUNK) ? length - sended*CHUNK : CHUNK;
             mesgInfo.data_decomp = mmap_next_file+ sended*CHUNK;
             mesgInfo.compression_lvl = controllerMainInfo.compression_lvl;
             mesgInfo.controllerID = TYPE_WORKER;
-            LOGMESG(LOG_INFO, "Sending %d bytes", (int) mesgInfo.size_decomp );
+            mesgInfo.number = sended;
+            LOGMESG(LOG_INFO, "Sended number %lld", (long long int) sended );
             giveInfoMesg( &mesgInfo );
             sended++;
-        }
+        } 
         if ( number_of_cicles >= FORA_IN_CHUNKS ){// when number will be more ther 1 , you should care about order.
-            mesgStruct mesgInfo;
-            LOGMESG(LOG_INFO, "Receiving... ");
-            takeInfoMesg(&mesgInfo , controllerID );
-            LOGMESG(LOG_INFO, "Receiving %d bytes", (int) mesgInfo.size_comp );
-            size_t offset = writeToOut(mesgInfo.data_comp,mesgInfo.size_comp);
-            free(mesgInfo.data_comp);
-            writeToOutByOffset( (char*) &offset, sizeof(size_t) ,placeForNextChunkOffset);
-            LOGMESG(LOG_INFO , "placeForNextChunkOffset = %x", (int) placeForNextChunkOffset);
-            placeForNextChunkOffset = offset + offsetof( fileChunk, nextFileChunk);
-            LOGMESG(LOG_INFO , "placeForNextChunkOffset = %x", (int) placeForNextChunkOffset);
+            mesgStruct* mesgInfo ;
+            if (received * CHUNK<length)
+            {
+                mesgInfo = (mesgStruct*) malloc(sizeof(mesgStruct));
+                //mesgStruct mesgInfo1;
+                takeInfoMesg(mesgInfo , controllerID );
+                //memcpy(mesgInfo, &mesgInfo1, sizeof(mesgInfo));
+                LOGMESG(LOG_INFO, "->Recieved number %lld, size = %d,  p = %p", (long long int) mesgInfo->number, (int)mesgInfo->size_comp  , mesgInfo);
+                mesgStackAdd( stack, mesgInfo);
+            }
+            mesgInfo = mesgStackGetFirst(stack);
+            
+            
+            if ( mesgInfo->number == next_receiving){
+                LOGMESG(LOG_INFO, "->Writing number %lld, p = %p", (long long int) mesgInfo->number,mesgInfo  );
+                next_receiving++;
+                mesgStackDeleteFirst(stack);
+                LOGMESG(LOG_INFO, "mesgStackDeleteFirst");
+                size_t offset = writeToOut(mesgInfo->data_comp,mesgInfo->size_comp);
+                LOGMESG(LOG_INFO, "writeToOut");
+                free(mesgInfo->data_comp);
+                LOGMESG(LOG_INFO, "free");
+                free(mesgInfo);
+                LOGMESG(LOG_INFO, "free");
+                writeToOutByOffset( (char*) &offset, sizeof(size_t) ,placeForNextChunkOffset);
+                LOGMESG(LOG_INFO, "writeToOutByOffset");
+                placeForNextChunkOffset = offset + offsetof( fileChunk, nextFileChunk);
+                
+            }
             received++;
         }
         number_of_cicles ++;
     }
+    mesgStackDestruct(stack);
     compressFileByChunks_exit_error_1:
     munmap( mmap_next_file, length);
     compressFileByChunks_exit_error_0:
@@ -249,7 +265,8 @@ int writeToOutByOffset(char* data, size_t size, size_t offset ){
 }
 
 size_t writeToOut( char* data, size_t size ){
-    LOGMESG(LOG_INFO, "Writing data to OUT  %c", data[0] );
+    LOGMESG(LOG_INFO, "Writing data to OUT size = %lld, p = %p", (long long) size, data  );
+    //Need to be atomic    !!!!!!!!!!!!!!!!!!
     if (controllerMainInfo.mmap_size<controllerMainInfo.mmap_last_symbol+size){
         /*
         char *new_mapping = (char*) mremap((void*)controllerMainInfo.mmap_start, controllerMainInfo.mmap_size,
@@ -262,15 +279,11 @@ size_t writeToOut( char* data, size_t size ){
         LOGMESG(LOG_ERROR, "FILE BIGGER THAN IT WAS EXPECTED");
         //use int ftruncate(int fildes, off_t length);
     }
-    if ( size >=17){
-    LOGMESG( LOG_INFO ,"Compressing first two bytes  %X %X", (int)data[16], (int)data[17]);
-    }
-    size_t offset_to_new_data = controllerMainInfo.mmap_last_symbol;
-    memcpy( controllerMainInfo.mmap_start + controllerMainInfo.mmap_last_symbol, data, size);
-    //char *a =controllerMainInfo.mmap_start + controllerMainInfo.mmap_last_symbol;
-    //a[0] = 'x';
-    controllerMainInfo.mmap_last_symbol = controllerMainInfo.mmap_last_symbol + size;
     
+    size_t offset_to_new_data = controllerMainInfo.mmap_last_symbol;
+    controllerMainInfo.mmap_last_symbol = controllerMainInfo.mmap_last_symbol + size;
+    //Need to be atomic    !!!!!!!!!!!!!!!!!!
+    memcpy( controllerMainInfo.mmap_start + offset_to_new_data, data, size);
     return offset_to_new_data;
 }
 
@@ -285,13 +298,13 @@ char* takeNextFile(char** names){
     return new_name;
 }
 
-
 int takeInfoMesg( mesgStruct * mesgInfo , long controllerID ){
         int result, length;
 
         /* The length is essentially the size of the structure minus sizeof(mtype) */
         length = sizeof(mesgStruct) - sizeof(long);        
-        if((result = msgrcv( controllerMainInfo.workers_qid , mesgInfo, length, controllerID ,  0)) == -1)
+        result = msgrcv( controllerMainInfo.workers_qid , mesgInfo, length, controllerID ,  0);
+        if(result  == -1)
         {
             LOGMESG( LOG_INFO , "msgrcving by controllerID %d" ,controllerID);
             return(-1);
@@ -302,11 +315,13 @@ int takeInfoMesg( mesgStruct * mesgInfo , long controllerID ){
 int giveInfoMesg(mesgStruct * mesgInfo){// controller must free this memory
         int     result, length;
         /* The length is essentially the size of the structure minus sizeof(mtype) */
-        length = sizeof(mesgStruct) - sizeof(long);        
+        length = sizeof(mesgStruct) - sizeof(long);   
+        if ( mesgInfo->number > 2665) LOGMESG( LOG_INFO , "Sending!!!  %d" ,(int) mesgInfo->number);
         if((result = msgsnd( controllerMainInfo.workers_qid, mesgInfo, length, 0)) == -1)
         {
                 return(-1);
         }
+        if ( mesgInfo->number > 2665) LOGMESG( LOG_INFO , "Sended!!!  %d" ,(int) mesgInfo->number);
         return(result);
 }
 
@@ -315,7 +330,6 @@ int compressChunk(mesgStruct * mesgInfo){
     fileChunk * data_comp = (fileChunk *) malloc( destLen - sizeof(fileChunk) );
     data_comp->nextFileChunk = 0;
     char * data = ((char*)data_comp) + sizeof(fileChunk);
-    LOGMESG( LOG_INFO ,"Compressinf offset between polya = %d, sizeof(fileChunk) = %d", (int) (data-(char*)data_comp), sizeof(fileChunk) );
     mesgInfo->data_comp = (char*) data_comp;
     int ret, flush;
     size_t have;
@@ -340,20 +354,19 @@ int compressChunk(mesgStruct * mesgInfo){
         strm.avail_in = bytesLeft; 
         flush = Z_FINISH;
         strm.next_in = mesgInfo->data_decomp;
-        LOGMESG( LOG_INFO, "ProcessingNextChunk");
         do
-        {sleep(1);
+        {
             if ( destLen - numberOfCompressedBytes < 0){
                 LOGMESG( LOG_ERROR, "Too small destbuf size");
             }
             size_t current_out_buf_size = (destLen - numberOfCompressedBytes);
             strm.avail_out = current_out_buf_size ;
-            printf("bytesLeft = %d\n", (int) strm.avail_out);
+            //printf("bytesLeft = %d\n", (int) strm.avail_out);
             strm.next_out = data + numberOfCompressedBytes;
             ret = deflate(&strm, flush);    /* no bad return value */
             assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
             have = current_out_buf_size - (size_t) strm.avail_out;
-            printf("Have = %d\n", (int) have);
+            //printf("Have = %d\n", (int) have);
             numberOfCompressedBytes += have;
             //if (fwrite(out, 1, have, dest)
             //!= have || ferror(dest)) { (void)deflateEnd(&strm);return Z_ERRNO; }
@@ -368,7 +381,6 @@ int compressChunk(mesgStruct * mesgInfo){
 
     /* clean up and return */
     (void)deflateEnd(&strm);
-    LOGMESG(LOG_INFO, "Compressing first two bytes  %X %X", (int)((char*)data_comp)[16], (int)((char*)data_comp)[17]);
     mesgInfo->size_comp = numberOfCompressedBytes+sizeof(fileChunk);
     data_comp->size_of_data = numberOfCompressedBytes +sizeof(fileChunk);
     return 0;
@@ -390,9 +402,7 @@ size_t addFileToFL(int fd,char* nextFileName ){
     size_t offset = writeToOut( (char*) fDesc , sizeof(fDescription)+strlen(nextFileName)+1);
     fileList *FL =  ( fileList* )controllerMainInfo.mmap_start;
     FL->fDescriptionOffset[FL->count] = offset; // todo
-    LOGMESG(LOG_INFO, "fileList files count = %d", (int)FL->count );
     FL->count = FL->count + 1;
-    LOGMESG(LOG_INFO, "fileList files count = %d", (int)FL->count );
     return offset;
 }
     
@@ -446,12 +456,7 @@ int restoreFile( char* mmap_start, size_t offset_to_file ){
         }
     }
     close( fd_out);
-
-    
-    
-    
-
-    
+ 
 }
 
 int restoreChunk( mesgStruct* mesg){
@@ -512,8 +517,6 @@ int restoreChunk( mesgStruct* mesg){
 
     /* clean up and return */
     (void)inflateEnd(&strm);
-    
     mesg->size_decomp = numberOfInflatedBytes;
     return ret == Z_STREAM_END ? 0 : -1;
-
 }

@@ -33,6 +33,17 @@ typedef struct{
     size_t nextFLOffset;
 }fileList;
 
+
+typedef struct{
+    long controllerID;          /* Message type */
+    int compression_lvl;
+    size_t number;
+    char* data_decomp;
+    size_t size_decomp;
+    char* data_comp;
+    size_t size_comp;
+}mesgStruct;
+
 #endif // _ARCHIVATOR_DATA_PRESENTATION_
 
 

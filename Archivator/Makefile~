@@ -2,10 +2,14 @@ PROGPATH=.
 INCLUDES=$(PROGPATH)/include
 TOOLSPATH=$(PROGPATH)/tools
 
+SRC_FILES=$(PROGPATH)/log/logProc.c $(PROGPATH)/core/data_presentation_controller.c $(PROGPATH)/core/sorted_mesg_stack.c
+
 all: archivator run
 
-archivator: $(INCLUDES)/log.h $(PROGPATH)/log/logProc.c archivator.c
-	$(CC) -o archivator $(PROGPATH)/log/logProc.c archivator.c $(PROGPATH)/core/data_presentation_controller.c $(TOOLSPATH)/zlib/libz.a -pthread -I$(INCLUDES) -g
+archivator: archivator.c $(SRC_FILES)
+	$(CC) $^ -o $@ -I$(INCLUDES) $(TOOLSPATH)/zlib/libz.a -pthread
 run: archivator
-	./archivator archivator
-clean:
+	./archivator to_compress 
+archivator.c: $(INCLUDES)/zlib/zlib.h $(INCLUDES)/data_presentation.h $(INCLUDES)/log.h $(INCLUDES)/scaner.h $(INCLUDES)/sorted_mesg_stack.h
+
+

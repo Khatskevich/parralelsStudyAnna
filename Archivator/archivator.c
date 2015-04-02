@@ -8,7 +8,7 @@
 #include <linux/msg.h>
 
 int main(int argc, char** argv){
-    logInit(LOG_INFO, LOG_PRINT_LEVEL_DESCRIPTION | LOG_PRINT_FILE | LOG_PRINT_LINE , NULL);
+    logInit(LOG_INFO, LOG_PRINT_LEVEL_DESCRIPTION | LOG_PRINT_FILE | LOG_PRINT_LINE , "log.txt");
     if ( argc == 3)
     {
         LOGMESG(LOG_INFO, "Decompression...");
@@ -19,7 +19,7 @@ int main(int argc, char** argv){
         char* files[2];
         files[0] = argv[1];
         files[1] = NULL; 
-        dataPresentationControllerInit("compressed", 3, 1, files, argv[0] );
+        dataPresentationControllerInit("compressed", 1, 1, files, argv[0] );
         compressionPerform();
     }
     logClose();
