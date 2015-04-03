@@ -1,15 +1,13 @@
 //#define DEBUG
 
-#include "log.h"
-#include "data_presentation.h"
-#include "sorted_mesg_stack.h"
+#include "archivator.h"
 
 #include "scaner.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
+//
 
 
 mesgStack *mesgStackInit(){

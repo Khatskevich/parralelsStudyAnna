@@ -1,6 +1,7 @@
 #ifndef _ARCHIVATOR_SORTED_MESG_STACK_
 #define _ARCHIVATOR_SORTED_MESG_STACK_
 
+#include "archivator.h"
 #include "data_presentation.h"
 
 typedef struct mesgStackElement{

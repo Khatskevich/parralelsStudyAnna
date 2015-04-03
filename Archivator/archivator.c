@@ -1,14 +1,15 @@
 #define DEBUG
-#include "log.h"
-#include "data_presentation.h"
-#include "scaner.h"
+#include "archivator.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <linux/ipc.h>
 #include <linux/msg.h>
 
+
+
 int main(int argc, char** argv){
-    logInit(LOG_INFO, LOG_PRINT_LEVEL_DESCRIPTION | LOG_PRINT_FILE | LOG_PRINT_LINE , "log.txt");
+    logInit(LOG_INFO, LOG_PRINT_TIME | LOG_PRINT_LEVEL_DESCRIPTION | LOG_PRINT_FILE | LOG_PRINT_LINE , NULL);
     if ( argc == 3)
     {
         LOGMESG(LOG_INFO, "Decompression...");
