@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 #include "archivator.h"
 
@@ -32,7 +32,7 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info);
 
 
 static controllerMainStruct* controllerMainInfo;
-fileIterStruct  fileIterInfo = {.fileIsProcessing = 0,.fileNameIter=0, .dirsNumber = 0};
+fileIterStruct  fileIterInfo = {.fileIsProcessing = 0,.fileNameIter=0, .dirsNumber = 0,.offsetToRootFL = 0};
 
 
 
@@ -84,7 +84,7 @@ fInfoForCompressor takeNextFile(char** names){
         LOGMESG(LOG_ERROR, "opening next file name");
         goto takeNextFile_exit_error_1;
     }
-    size_t offset = addFileToFL(fd,new_name, 0 );
+    size_t offset = addFileToFL(fd,new_name, &fileIterInfo.offsetToRootFL);
     
     fDescription * f_desc = ( fDescription *) ( controllerMainInfo->mmap_start +offset);
     
@@ -96,7 +96,7 @@ fInfoForCompressor takeNextFile(char** names){
     takeNextFile_exit_error_1:
     takeNextFile_exit_error_0:
     takeNextFile_exit_ok:
-        sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1,SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1,0); //allow for only one process to be in the TAKE_NEXT_FILE function
         semop( controllerMainInfo->sem , sops, 1);
         return f_info;
 }
@@ -106,7 +106,6 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info){
     if (fileIterInfo.dirsNumber + 1 < MAXIMAL_STACK_OF_DIRECTORIES){
         char* pathToDir;
         if ( fileIterInfo.dirsNumber == 0){
-            LOGMESG(LOG_INFO, "fileIterInfo.dirsNumber == 0");
             FLoffset = 0;//////////////////////////////
             pathToDir = (char*) malloc( strlen(name) +1);
             memcpy(pathToDir, name, strlen(name) +1);
@@ -124,7 +123,12 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info){
         if (fileIterInfo.dirsStack[fileIterInfo.dirsNumber].d == NULL){
             LOGMESG(LOG_ERROR, "Opening directory!");
         }
-        size_t offset_to_fl = addDirToFL( 0 , name , FLoffset );
+        size_t offset_to_fl;
+        if ( fileIterInfo.dirsNumber == 0){
+            offset_to_fl = addDirToFL( 0 , name , &fileIterInfo.offsetToRootFL );
+        }else{
+            offset_to_fl = addDirToFL( 0 , name , &fileIterInfo.dirsStack[fileIterInfo.dirsNumber -1 ].offset_to_fl );
+        }
         fileIterInfo.dirsStack[fileIterInfo.dirsNumber].offset_to_fl = offset_to_fl;
 
         fileIterInfo.dirsNumber++;
@@ -159,11 +163,17 @@ void takeNextFileFromDir(fInfoForCompressor* f_info){
         char* pathToFile = (char*) malloc( strlen( pathToDir) + strlen(name) +2);
         snprintf( pathToFile,strlen( pathToDir) + strlen(name) +2, "%s/%s",pathToDir, name );
         int fd = open( pathToFile,O_RDONLY );
-        LOGMESG(LOG_INFO, "takeNextFileFromDir addFileToFL, %s",pathToFile );
-        size_t offset = addFileToFL(fd,name, fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].offset_to_fl );
+        size_t offset = addFileToFL(fd,name, &fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].offset_to_fl );
         LOGMESG(LOG_WARN, "Path to finded file -> %s", pathToFile);
         fDescription * f_desc = ( fDescription *) ( controllerMainInfo->mmap_start +offset);
-        f_info->length = f_desc->st_size;;
+        
+        if (f_desc->st_size == 0){
+            takeNextFileFromDir(f_info);
+            return;
+        }
+            
+        
+        f_info->length = f_desc->st_size;
         f_info->fd = fd;
         f_info->firstFileChunkOffset = offset + offsetof( fDescription, firstFileChunkOffset );
         f_info->valid = 1;

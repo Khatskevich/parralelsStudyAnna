@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 #include "archivator.h"
 
@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <unistd.h> 
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
@@ -29,7 +29,6 @@
 void* pthreadMainLoop(void*);
 void* controllerCompress(void* ID);
 size_t writeToOut( char* data, size_t size );
-size_t addFileToFL(int fd,char* nextFileName , size_t offset );
 
 
 
@@ -112,16 +111,20 @@ int dataPresentationControllerInit(char* outFName,
                 goto dataPresentationControllerInit_exit_error_2;
         }
     controllerMainInfo.sem = sem;
-    struct sembuf sops[3];
-    sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+2, S_WRITE_TO_OUT , 1, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+    struct sembuf sops[3]; 
+    sem_change_ptr(sops, S_TAKE_NEXT_FILE , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+2, S_WRITE_TO_OUT , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 3);
-    
+    sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+2, S_WRITE_TO_OUT , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    semop( controllerMainInfo.sem , sops, 3);
     
     
     fileList firstStructure;
     firstStructure.count = 0;
+    firstStructure.nextFLOffset = 0;
     size_t offset;
     offset = writeToOut( (char*) &firstStructure, sizeof(fileList));
     
@@ -297,7 +300,7 @@ size_t writeToOut( char* data, size_t size ){
     size_t offset_to_new_data = controllerMainInfo.mmap_last_symbol;
     controllerMainInfo.mmap_last_symbol = controllerMainInfo.mmap_last_symbol + size;
     
-    sem_change_ptr(sops, S_WRITE_TO_OUT , 1, SEM_UNDO); //allow for only one process to be in the writeToOut function
+    sem_change_ptr(sops, S_WRITE_TO_OUT , 1, 0); //allow for only one process to be in the writeToOut function
     semop( controllerMainInfo.sem , sops, 1);
     
     //Need to be atomic    !!!!!!!!!!!!!!!!!!
@@ -394,8 +397,8 @@ int compressChunk(mesgStruct * mesgInfo){
     return 0;
 }
      
-size_t addFileToFL(int fd,char* nextFileName , size_t FLoffset  ){
-    LOGMESG(LOG_INFO, "addFileToFL addDirToFL , offset = %lld", ( long long) FLoffset);
+size_t addFileToFL(int fd,char* nextFileName , size_t* FLoffset  ){
+    LOGMESG(LOG_INFO, "addFileToFL addDirToFL , offset = %lld", ( long long) *FLoffset);
     struct sembuf sops[1];
     sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
@@ -417,24 +420,26 @@ size_t addFileToFL(int fd,char* nextFileName , size_t FLoffset  ){
     //fDesc->st_ctime = stbuf.st_ctime;
     size_t offset = writeToOut( (char*) fDesc , sizeof(fDescription)+strlen(nextFileName)+1);
     free(fDesc);
-    fileList *FL =  ( fileList* )(controllerMainInfo.mmap_start + FLoffset);
-    FL->fDescriptionOffset[FL->count] = offset; // todo
-    FL->count = FL->count + 1;//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    fileList *FL =  ( fileList* )(controllerMainInfo.mmap_start + *FLoffset);
+    addOffsetToFL( FL, FLoffset, offset);
+    //FL->fDescriptionOffset[FL->count] = offset; // todo
+    //FL->count = FL->count + 1;//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
     return offset;
 }
 
 
-size_t addDirToFL(int fd, char* nextDirName , size_t FLoffset ){
-    LOGMESG(LOG_INFO, "addDirToFL , offset = %lld", ( long long) FLoffset);
+size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset ){
+    LOGMESG(LOG_INFO, "addDirToFL , offset = %lld", ( long long) *FLoffset);
     struct sembuf sops[1];
     sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
 
     fileList FL_2; 
     FL_2.count = 0;
+    FL_2.nextFLOffset = 0;
     size_t offset_to_fl_2;
     offset_to_fl_2 = writeToOut( (char*) &FL_2, sizeof(fileList));
     fDescription *fDesc = (fDescription*) malloc( sizeof(fDescription) + strlen(nextDirName)+1 );
@@ -443,12 +448,30 @@ size_t addDirToFL(int fd, char* nextDirName , size_t FLoffset ){
     memcpy( ((char*)fDesc) + sizeof(fDescription) , nextDirName,  strlen(nextDirName)+1);
     size_t offset = writeToOut( (char*) fDesc , sizeof(fDescription)+strlen(nextDirName)+1);
     free(fDesc);
-    fileList *FL =  ( fileList* )(controllerMainInfo.mmap_start + FLoffset);
-    FL->fDescriptionOffset[FL->count] = offset; // todo
-    FL->count = FL->count + 1;////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
+    fileList *FL =  ( fileList* )(controllerMainInfo.mmap_start + *FLoffset);
+    addOffsetToFL( FL, FLoffset, offset);
+    //FL->fDescriptionOffset[FL->count] = offset; // todo
+    //FL->count = FL->count + 1;////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
     return offset_to_fl_2;
+}
+
+int addOffsetToFL( fileList *FL ,size_t* FLoffset, size_t offset){
+    size_t offset_to_fl_2;
+    if ( FL->count == NUMDER_OF_FILES_IN_LIST ){
+        fileList FL_2;
+        FL_2.fDescriptionOffset[0] = offset;
+        FL_2.count = 1;
+        FL_2.nextFLOffset = 0;
+        offset_to_fl_2 = writeToOut( (char*) &FL_2, sizeof(fileList));
+        FL->nextFLOffset = offset_to_fl_2;
+        *FLoffset = offset_to_fl_2;
+    }else{
+        FL->fDescriptionOffset[FL->count] = offset;
+        FL->count = FL->count + 1;
+    }
+    return 0;
 }
 
     
@@ -483,7 +506,6 @@ int dataRestore(char* filename){
     if (stat("recovery", &st) == -1) {
         rc = mkdir("recovery", 0777);
         if ( rc != 0 ) LOGMESG(LOG_ERROR ,"Creating directory error");
-        perror("");
         rc = chdir("recovery");
         restoreFileList(FL);
         chdir("..");
@@ -497,14 +519,16 @@ int restoreFileList(fileList *FL){
     char* mmap_start = controllerMainInfo.mmap_start;
     int i;
     LOGMESG(LOG_INFO, "fileList files count = %d", (int)FL->count );
-    for( i = 0; i<FL->count; i++){
+    for( i = 0; i< FL->count; i++){
         restoreFile(FL->fDescriptionOffset[i]);
     }
-    if ( FL->count == NUMDER_OF_FILES_IN_LIST ){
+    if ( FL->count == NUMDER_OF_FILES_IN_LIST && FL->nextFLOffset != 0  ){
+        LOGMESG(LOG_INFO, "restoreFileList RESTORING ADDITIONAL FL, offset = %lld ", ( long long) FL->nextFLOffset );
         fileList *FLNEXT = (fileList*) (mmap_start + FL->nextFLOffset);
         restoreFileList(FLNEXT);
-    }
+    }else{
     chdir("..");
+    }
     return 0;
 }
 
@@ -519,36 +543,43 @@ int restoreFile(  size_t offset_to_file ){
         restoreFileList(FL);
         
         return 0;
-    }
+    } 
     
-    int fd_out = open( (char*)&f_description[1] , O_CREAT | O_RDWR, 0666);
-    perror("");
+    int fd_out = open( (char*)&f_description[1] , O_CREAT | O_RDWR, f_description->st_mode);
+    LOGMESG(LOG_INFO, "restoreFile rfileChunk * file_chunk");
     fileChunk * file_chunk = (fileChunk *) (mmap_start + f_description->firstFileChunkOffset);
-    
-    while( 1 )
-    {
-        mesgStruct mesg;
-        mesg.data_comp = (char*) file_chunk;
-        if (restoreChunk(&mesg) == -1){
-            LOGMESG(LOG_ERROR, "Error while restoring CHUNK...");
-        }
-        LOGMESG(LOG_INFO, "Restoring numberOfRestoredBytes = %d", (int) mesg.size_decomp);
-        write( fd_out , mesg.data_decomp, mesg.size_decomp);
-        free(mesg.data_decomp);
-        if ( file_chunk->nextFileChunk == 0){
-            break;
-        }else{
-            file_chunk = (fileChunk *) (mmap_start + file_chunk->nextFileChunk);
+    LOGMESG(LOG_INFO, "after restoreFile rfileChunk * file_chunk, offset %lld", ( long long) f_description->firstFileChunkOffset);
+    if ( f_description->st_size >0){
+        while( 1 )
+        {
+            mesgStruct mesg;
+            mesg.data_comp = (char*) file_chunk;
+            LOGMESG(LOG_INFO, "restoreFile restoreChunk");
+            if (restoreChunk(&mesg) == -1){
+                LOGMESG(LOG_ERROR, "Error while restoring CHUNK...");
+            }
+            LOGMESG(LOG_INFO, "Restoring numberOfRestoredBytes = %d", (int) mesg.size_decomp);
+            write( fd_out , mesg.data_decomp, mesg.size_decomp);
+            free(mesg.data_decomp);
+            if ( file_chunk->nextFileChunk == 0){
+                LOGMESG(LOG_INFO, "Restoring of this file finished");
+                break;
+            }else{
+                LOGMESG(LOG_INFO, "Restoring next chunk");
+                file_chunk = (fileChunk *) (mmap_start + file_chunk->nextFileChunk);
+            }
         }
     }
     close( fd_out);
- 
 }
 
 int restoreChunk( mesgStruct* mesg){
-    
+    LOGMESG(LOG_INFO, "restoreChunk mesg = %p, mesg->data_comp = %p", mesg,mesg->data_comp);
     fileChunk * file_chunk = (fileChunk *)mesg->data_comp;
     char * data_decomp = (char*) malloc( CHUNK +1 ); // need to be free from outside
+    if ( data_decomp == NULL){
+        LOGMESG(LOG_ERROR, "restoreChunk, malloc");
+    }
     char * data_comp = (char*) &file_chunk[1];
     size_t numberOfCompressedBytes = file_chunk->size_of_data - sizeof(fileChunk);
     size_t numberOfInflatedBytes = 0;
@@ -586,10 +617,11 @@ int restoreChunk( mesgStruct* mesg){
             assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
             switch (ret) {
             case Z_NEED_DICT:
+                LOGMESG(LOG_ERROR, "restoreChunk Restoring Error");
                 ret = Z_DATA_ERROR;     /* and fall through */
             case Z_DATA_ERROR:
-                LOGMESG(LOG_ERROR, "Restoring Error");
             case Z_MEM_ERROR:
+                LOGMESG(LOG_ERROR, "restoreChunk Restoring Error");
                 (void)inflateEnd(&strm);
                 return ret;
             }

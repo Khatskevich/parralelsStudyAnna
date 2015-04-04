@@ -73,8 +73,8 @@ typedef struct{
 
 
 
-size_t addFileToFL(int fd,char* nextFileName, size_t FLoffset  );
-size_t addDirToFL(int fd, char* nextDirName , size_t FLoffset );
+size_t addFileToFL(int fd,char* nextFileName, size_t* FLoffset  );
+size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset );
 int dataRestore(char* filename);
 size_t writeToOut( char* data, size_t size );
 int compressionPerform();

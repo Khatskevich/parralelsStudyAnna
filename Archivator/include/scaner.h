@@ -14,6 +14,7 @@ typedef struct{
     size_t fileNameIter; // iterator for files, taken from cmdl
     int fileIsProcessing; // show, if it is necessary to process next cmdl argument
     size_t dirsNumber;
+    size_t offsetToRootFL;
     DirInterStruct* dirsStack;
 } fileIterStruct;
 

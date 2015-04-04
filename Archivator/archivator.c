@@ -20,7 +20,7 @@ int main(int argc, char** argv){
         char* files[2];
         files[0] = argv[1];
         files[1] = NULL; 
-        dataPresentationControllerInit("compressed", 1, 1, files, argv[0] );
+        dataPresentationControllerInit("compressed", 5, 1, files, argv[0] );
         compressionPerform();
     }
     logClose();
