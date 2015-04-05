@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 
 #include "archivator.h"
 
@@ -34,7 +34,7 @@ size_t writeToOut( char* data, size_t size );
 
 
 
-static controllerMainStruct controllerMainInfo;
+static controllerMainStruct controllerMainInfo; 
 
 
 
@@ -109,18 +109,19 @@ int dataPresentationControllerInit(char* outFName,
         if ( sem == -1 ) {
                 LOGMESG(LOG_ERROR,"semget");
                 goto dataPresentationControllerInit_exit_error_2;
-        }
+        } 
     controllerMainInfo.sem = sem;
     struct sembuf sops[3]; 
     sem_change_ptr(sops, S_TAKE_NEXT_FILE , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
     sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
     sem_change_ptr(sops+2, S_WRITE_TO_OUT , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 3);
-    sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+2, S_WRITE_TO_OUT , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-    semop( controllerMainInfo.sem , sops, 3);
-    
+    if ( NUMBER_OF_COMPRESSORS > 1){
+        sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+2, S_WRITE_TO_OUT , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        semop( controllerMainInfo.sem , sops, 3);
+    }
     
     fileList firstStructure;
     firstStructure.count = 0;
@@ -156,15 +157,14 @@ int compressionPerform(){
     for ( i = 0; i < NUMBER_OF_COMPRESSORS ; i++){
         rc = pthread_join(compressorThreadId[i], NULL);
     }
-    
     LOGMESG(LOG_INFO, "Closing messages");
     msgctl( controllerMainInfo.workers_qid, IPC_RMID, NULL); 
-    munmap( controllerMainInfo.mmap_start, controllerMainInfo.mmap_size);
-    ftruncate( controllerMainInfo.fd_out, controllerMainInfo.mmap_last_symbol);
-    close( controllerMainInfo.fd_out);
     for ( i = 0; i < NUMBER_OF_WORKERS ; i++){
         rc = pthread_join(workerThreadId[i], NULL);
     }
+    munmap( controllerMainInfo.mmap_start, controllerMainInfo.mmap_size);
+    ftruncate( controllerMainInfo.fd_out, controllerMainInfo.mmap_last_symbol);
+    close( controllerMainInfo.fd_out);
 }
 
 void* pthreadMainLoop( void* params){
@@ -177,9 +177,9 @@ int threadDoCompression(){
     if ( takeInfoMesg( &mesgInfo, TYPE_WORKER) ){
         return 1;
     }
-    LOGMESG(LOG_INFO, "Compressing %d bytes for controller %d", (int) mesgInfo.size_decomp, mesgInfo.controllerID );
+    LOGMESG(LOG_INFO, "Compressing %d bytes for controller %d", (int) mesgInfo.size_decomp, mesgInfo.from );
     compressChunk(&mesgInfo);
-    LOGMESG(LOG_INFO, "Recieved number in worker %lld, size comp = %d ", (long long int) mesgInfo.number, (int) mesgInfo.size_comp  );
+    LOGMESG(LOG_INFO, "Compressing Finished for controller %d size comp = %d ,  data_decomp p = %p", mesgInfo.from , (int) mesgInfo.size_comp, mesgInfo.data_decomp  );
     mesgInfo.controllerID = mesgInfo.from;
     giveInfoMesg(&mesgInfo); // controller must free this memory
     return 0;
@@ -198,7 +198,6 @@ void* controllerCompress(void* ID){
             compressFileByChunks(controllerID , nextFile);
             close(nextFile.fd);
         }
-        
     }
 }
 
@@ -229,7 +228,7 @@ int compressFileByChunks(int controllerID, fInfoForCompressor f_info){
             mesgInfo.controllerID = TYPE_WORKER;
             mesgInfo.number = sended;
             mesgInfo.from = controllerID;
-            LOGMESG(LOG_INFO, "Sended number %lld", (long long int) sended );
+            LOGMESG(LOG_INFO, "Sended number %lld fron id = %d", (long long int) sended, controllerID );
             giveInfoMesg( &mesgInfo );
             sended++;
         } 
@@ -293,7 +292,7 @@ size_t writeToOut( char* data, size_t size ){
             return 0;
         }
         controllerMainInfo.mmap_start = new_mapping;*/
-        LOGMESG(LOG_ERROR, "FILE BIGGER THAN IT WAS EXPECTED");
+        LOGMESG(LOG_ERROR, "FILE BIGGER THAN IT WAS EXPECTED"); 
         //use int ftruncate(int fildes, off_t length);
     }
     
@@ -337,8 +336,9 @@ int giveInfoMesg(mesgStruct * mesgInfo){// controller must free this memory
 }
 
 int compressChunk(mesgStruct * mesgInfo){
+    LOGMESG( LOG_INFO , "compressChunk of pointer data_decomp %p" , mesgInfo->data_decomp);
     size_t destLen = CHUNK*2 + 1000;
-    fileChunk * data_comp = (fileChunk *) malloc( destLen - sizeof(fileChunk) );
+    fileChunk * data_comp = (fileChunk *) malloc( destLen + sizeof(fileChunk) );
     data_comp->nextFileChunk = 0;
     char * data = ((char*)data_comp) + sizeof(fileChunk);
     mesgInfo->data_comp = (char*) data_comp;
@@ -466,7 +466,7 @@ int addOffsetToFL( fileList *FL ,size_t* FLoffset, size_t offset){
         FL_2.nextFLOffset = 0;
         offset_to_fl_2 = writeToOut( (char*) &FL_2, sizeof(fileList));
         FL->nextFLOffset = offset_to_fl_2;
-        *FLoffset = offset_to_fl_2;
+        FLoffset[0] = offset_to_fl_2;
     }else{
         FL->fDescriptionOffset[FL->count] = offset;
         FL->count = FL->count + 1;
@@ -533,6 +533,7 @@ int restoreFileList(fileList *FL){
 }
 
 int restoreFile(  size_t offset_to_file ){
+    int rc;
     char* mmap_start = controllerMainInfo.mmap_start;
     fDescription * f_description = (fDescription *) (mmap_start + offset_to_file);
     LOGMESG(LOG_INFO, "Restoring file... %s", ((char*)&f_description[1]) );
@@ -544,11 +545,14 @@ int restoreFile(  size_t offset_to_file ){
         
         return 0;
     } 
+    // tested component
+    if ( S_ISLNK(f_description->st_mode) ){
+        rc = symlink( mmap_start+f_description->firstFileChunkOffset , (char*) &f_description[1]);
+        return 0;
+    }
     
     int fd_out = open( (char*)&f_description[1] , O_CREAT | O_RDWR, f_description->st_mode);
-    LOGMESG(LOG_INFO, "restoreFile rfileChunk * file_chunk");
     fileChunk * file_chunk = (fileChunk *) (mmap_start + f_description->firstFileChunkOffset);
-    LOGMESG(LOG_INFO, "after restoreFile rfileChunk * file_chunk, offset %lld", ( long long) f_description->firstFileChunkOffset);
     if ( f_description->st_size >0){
         while( 1 )
         {
@@ -585,8 +589,6 @@ int restoreChunk( mesgStruct* mesg){
     size_t numberOfInflatedBytes = 0;
     mesg->data_decomp = data_decomp;
     LOGMESG(LOG_INFO, "Restoring numberOfCompressedBytes = %d", (int) numberOfCompressedBytes);
-    LOGMESG(LOG_INFO, "Restoring offset between polya = %d, sizeof(fileChunk) = %d", (int) (data_comp -(char*)file_chunk), sizeof(fileChunk) );
-    LOGMESG(LOG_INFO, "Restoring first two bytes  %X %X", (int)((char*)file_chunk)[16], (int)((char*)file_chunk)[17]);
     int ret;
     unsigned have;
     z_stream strm;

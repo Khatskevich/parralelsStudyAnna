@@ -26,7 +26,10 @@ typedef struct{
     //time_t    st_atime;   /* time of last access */
     //time_t    st_mtime;   /* time of last modification */
     //time_t    st_ctime;   /* time of last status change */
-    size_t    firstFileChunkOffset;// or if it iz dir-> it is pointer to FL
+    size_t    firstFileChunkOffset;
+    // or if it iz dir-> it is pointer to FL
+    // or if it is symlink -> address of symlink
+    
     // some space for filename (char*)    
 }fDescription;
 

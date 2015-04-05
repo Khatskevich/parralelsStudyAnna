@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 
 #include "archivator.h"
 
@@ -34,7 +34,7 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info);
 static controllerMainStruct* controllerMainInfo;
 fileIterStruct  fileIterInfo = {.fileIsProcessing = 0,.fileNameIter=0, .dirsNumber = 0,.offsetToRootFL = 0};
 
-
+ 
 
 void scanerInit(controllerMainStruct* controllerInfo ){
     LOGMESG(LOG_INFO, "scanerInit, p =%p " ,controllerInfo  );
@@ -69,15 +69,17 @@ fInfoForCompressor takeNextFile(char** names){
 
     struct stat st;
     if(stat(new_name,&st) == 0){ // If it is a directory
-        if(st.st_mode & S_IFDIR != 0)
+        if( S_ISDIR(st.st_mode) )
         {
             fileIterInfo.fileIsProcessing = 1; 
             takeNextFileNewDir(new_name, &f_info );
             goto takeNextFile_exit_ok;
         }
+        /*if(st.st_mode & S_IFREG == 0)
+        {
+            goto takeNextFile_exit_error_0;
+        }*/
     }
-    
-
     
     fd = open( new_name , O_RDONLY);
     if ( fd == -1 ){
@@ -88,7 +90,7 @@ fInfoForCompressor takeNextFile(char** names){
     
     fDescription * f_desc = ( fDescription *) ( controllerMainInfo->mmap_start +offset);
     
-    f_info.length = f_desc->st_size;;
+    f_info.length = f_desc->st_size;
     f_info.fd = fd;
     f_info.firstFileChunkOffset = offset + offsetof( fDescription, firstFileChunkOffset );
     f_info.valid = 1;
@@ -102,23 +104,19 @@ fInfoForCompressor takeNextFile(char** names){
 }
 void takeNextFileNewDir(char* name, fInfoForCompressor * f_info){
     LOGMESG(LOG_INFO, "takeNextFileNewDir");
-    size_t FLoffset;
     if (fileIterInfo.dirsNumber + 1 < MAXIMAL_STACK_OF_DIRECTORIES){
         char* pathToDir;
         if ( fileIterInfo.dirsNumber == 0){
-            FLoffset = 0;//////////////////////////////
             pathToDir = (char*) malloc( strlen(name) +1);
             memcpy(pathToDir, name, strlen(name) +1);
-            LOGMESG(LOG_INFO, "Path to finded directory -> %s" , pathToDir);
-            fileIterInfo.dirsStack[fileIterInfo.dirsNumber].pathToDir = pathToDir;
         }else{
-            FLoffset = fileIterInfo.dirsStack[fileIterInfo.dirsNumber -1 ].offset_to_fl;
             char* pathToPrevDir = fileIterInfo.dirsStack[fileIterInfo.dirsNumber -1 ].pathToDir;
             pathToDir = (char*) malloc( strlen( pathToPrevDir) + strlen(name) +2);
             snprintf( pathToDir,strlen( pathToPrevDir) + strlen(name) +2, "%s/%s",pathToPrevDir, name );
-            LOGMESG(LOG_WARN, "Path to finded directory -> %s", pathToDir);
-            fileIterInfo.dirsStack[fileIterInfo.dirsNumber].pathToDir =pathToDir;
         }
+        LOGMESG(LOG_INFO, "Path to finded directory -> %s", pathToDir);
+        fileIterInfo.dirsStack[fileIterInfo.dirsNumber].pathToDir =pathToDir;
+        
         fileIterInfo.dirsStack[fileIterInfo.dirsNumber].d = opendir(pathToDir);
         if (fileIterInfo.dirsStack[fileIterInfo.dirsNumber].d == NULL){
             LOGMESG(LOG_ERROR, "Opening directory!");
@@ -127,7 +125,7 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info){
         if ( fileIterInfo.dirsNumber == 0){
             offset_to_fl = addDirToFL( 0 , name , &fileIterInfo.offsetToRootFL );
         }else{
-            offset_to_fl = addDirToFL( 0 , name , &fileIterInfo.dirsStack[fileIterInfo.dirsNumber -1 ].offset_to_fl );
+            offset_to_fl = addDirToFL( 0 , name , &(fileIterInfo.dirsStack[fileIterInfo.dirsNumber -1 ].offset_to_fl) );
         }
         fileIterInfo.dirsStack[fileIterInfo.dirsNumber].offset_to_fl = offset_to_fl;
 
@@ -136,6 +134,7 @@ void takeNextFileNewDir(char* name, fInfoForCompressor * f_info){
     }else{
         LOGMESG(LOG_ERROR, "MAXIMAL_STACK_OF_DIRECTORIES overflow");
         f_info->valid = -1;
+        fileIterInfo.fileIsProcessing = 0;
     }
 }
 
@@ -143,13 +142,15 @@ void takeNextFileFromDir(fInfoForCompressor* f_info){
     LOGMESG(LOG_INFO, "takeNextFileFromDir");
     DIR *d;
     d = fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].d;
-    struct dirent *dir;
-    dir = readdir(d);
+    struct dirent dirs;
+    struct dirent *dir = &dirs;
+    struct dirent **dirpp = &dir;
+    readdir_r(d,dir, dirpp );
     if( dir == NULL){
         takeNextFileCancelDir(f_info);
         return;
     }
-    if ( dir->d_type == 4){ //////////////////////////////////////////////////////// 
+    if ( dir->d_type == DT_DIR){ //////////////////////////////////////////////////////// 
         if ( strcmp(dir->d_name , ".")==0 ||  strcmp(dir->d_name , "..")==0 ){
             takeNextFileFromDir(f_info);
             return;
@@ -157,17 +158,41 @@ void takeNextFileFromDir(fInfoForCompressor* f_info){
             takeNextFileNewDir(dir->d_name , f_info );
             return ;
         }
-    }else{// simple file
+    }else if ( dir->d_type == DT_REG ||  dir->d_type == DT_LNK )   {// simple file
         char* name = dir->d_name;
         char * pathToDir = fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].pathToDir;
         char* pathToFile = (char*) malloc( strlen( pathToDir) + strlen(name) +2);
         snprintf( pathToFile,strlen( pathToDir) + strlen(name) +2, "%s/%s",pathToDir, name );
         int fd = open( pathToFile,O_RDONLY );
-        size_t offset = addFileToFL(fd,name, &fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].offset_to_fl );
-        LOGMESG(LOG_WARN, "Path to finded file -> %s", pathToFile);
+        size_t offset = addFileToFL(fd,name, &(fileIterInfo.dirsStack[fileIterInfo.dirsNumber-1].offset_to_fl) );
+        LOGMESG(LOG_INFO, "Path to finded file -> %s", pathToFile);
         fDescription * f_desc = ( fDescription *) ( controllerMainInfo->mmap_start +offset);
+        LOGMESG(LOG_INFO, "Path to finded file -> %s, stmode = %o, d_type = %o", pathToFile,(int) f_desc->st_mode , ( int)dir->d_type );
+        if(dir->d_type == DT_LNK ){
+            LOGMESG(LOG_INFO, "Symlink processing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            struct stat sb;
+            lstat(pathToFile, &sb);
+            f_desc->st_mode = S_IFLNK;
+            f_desc->st_size = sb.st_size;
+            char* linkname = (char*) malloc ( f_desc->st_size + 1);
+            ssize_t r = readlink(pathToFile, linkname, f_desc->st_size + 1);
+            if ( (r > f_desc->st_size) || r<0 ){//!
+                LOGMESG(LOG_ERROR, "Symlink was changed while processing");
+                f_desc->firstFileChunkOffset = 0;
+            }else{
+                f_desc->firstFileChunkOffset = writeToOut( linkname , f_desc->st_size + 1 );
+            }
+            free(linkname);
+            free(pathToFile);
+            close(fd);
+            takeNextFileFromDir(f_info );
+            return;
+        }
+        
+        free(pathToFile);
         
         if (f_desc->st_size == 0){
+            close(fd);
             takeNextFileFromDir(f_info);
             return;
         }
@@ -178,8 +203,11 @@ void takeNextFileFromDir(fInfoForCompressor* f_info){
         f_info->firstFileChunkOffset = offset + offsetof( fDescription, firstFileChunkOffset );
         f_info->valid = 1;
         return;
+    }else{
+        takeNextFileFromDir(f_info);
+        return;
     }
-}
+} 
 
 void takeNextFileCancelDir(fInfoForCompressor * f_info){
     LOGMESG(LOG_INFO, "takeNextFileCancelDir");
@@ -192,6 +220,7 @@ void takeNextFileCancelDir(fInfoForCompressor * f_info){
     }
     if ( fileIterInfo.dirsNumber > 0){
         takeNextFileFromDir(f_info);
+        return;
     }else{
         f_info->valid = 0;
         fileIterInfo.fileIsProcessing = 0;

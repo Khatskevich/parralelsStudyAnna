@@ -7,7 +7,7 @@ SRC_FILES=$(PROGPATH)/log/logProc.c $(PROGPATH)/core/data_presentation_controlle
 all: archivator
 
 archivator: archivator.c $(SRC_FILES)
-	$(CC) $^ -o $@ -I$(INCLUDES) $(TOOLSPATH)/zlib/libz.a -pthread -g
+	$(CC) $^ -o $@ -I$(INCLUDES) $(TOOLSPATH)/zlib/libz.a -pthreads -g
 run: archivator
 	./archivator to_compress 
 archivator.c: $(INCLUDES)/zlib/zlib.h $(INCLUDES)/data_presentation.h $(INCLUDES)/log.h $(INCLUDES)/scaner.h $(INCLUDES)/sorted_mesg_stack.h  $(INCLUDES)/scaner.h $(INCLUDES)/archivator.h

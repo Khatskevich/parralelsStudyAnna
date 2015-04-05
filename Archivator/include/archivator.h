@@ -7,10 +7,10 @@
 #include "scaner.h"
 #include "archivator.h"
 
-#define FORA_IN_CHUNKS 30
-#define NUMBER_OF_WORKERS 20
-#define NUMBER_OF_COMPRESSORS 8
-#define MAX_FILE_LENGTH 50000000000llu
+#define FORA_IN_CHUNKS 0
+#define NUMBER_OF_WORKERS 1
+#define NUMBER_OF_COMPRESSORS 6
+#define MAX_FILE_LENGTH 90000000000llu
 #define TYPE_WORKER 1 
 #define MAXIMAL_STACK_OF_DIRECTORIES 250
 
