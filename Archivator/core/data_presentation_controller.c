@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/types.h>
+#include <sys/types.h> 
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h> 
@@ -19,11 +19,22 @@
 #include <sys/mman.h>
 #include "zlib.h"
 #include <assert.h> 
-#include <linux/ipc.h>
-#include <linux/msg.h>
-#include <linux/sem.h>
-#include <linux/shm.h>
+
 #include <errno.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+
+#include <sys/sem.h>
+#include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/shm.h>
+#include <string.h>
+#include <sys/ipc.h>
 
 
 void* pthreadMainLoop(void*);
@@ -31,10 +42,8 @@ void* controllerCompress(void* ID);
 size_t writeToOut( char* data, size_t size );
 
 
-
-
-
 static controllerMainStruct controllerMainInfo; 
+
 
 
 
@@ -48,17 +57,19 @@ int sem_change_ptr(struct sembuf *sops, short num , short value , short flag)//h
         return 0;
 }
 
+
 int dataPresentationControllerInit(char* outFName,
-                                   int compression_lvl, int nthread, char ** files, char* progname)
-{
+                                   int compression_lvl, int number_of_scaners, int number_of_workers, char ** files, char* progname)
+{ 
     LOGMESG(LOG_INFO, "dataPresentationControllerInit");
     int fd_out, rc;
     char* mmap_start;
-    if ( nthread <= 0 ||  nthread > 100){ 
+    if ( (number_of_scaners <= 0 ||  number_of_scaners > 100 ) ||  (number_of_workers <= 0 ||  number_of_workers > 100 ) ){ 
         LOGMESG(LOG_ERROR ,"Not valid nthread");
         goto dataPresentationControllerInit_exit_error_0;
     }
-    controllerMainInfo.nthread = nthread;
+    controllerMainInfo.number_of_scaners = number_of_scaners;
+    controllerMainInfo.number_of_workers = number_of_workers;
     if ( compression_lvl <= 0 ||  compression_lvl > 7){ 
         LOGMESG(LOG_ERROR ,"Not valid compression_lvl");
         goto dataPresentationControllerInit_exit_error_0;
@@ -91,7 +102,7 @@ int dataPresentationControllerInit(char* outFName,
     mmap_start = mmap(NULL, MAX_FILE_LENGTH, PROT_READ | PROT_WRITE ,
                     MAP_SHARED, fd_out, 0);
     if ( mmap_start == MAP_FAILED){
-        LOGMESG(LOG_ERROR ,"Error while creating mmap");
+        LOGMESG(LOG_ERROR ,"Error while creating mmap"); 
         goto dataPresentationControllerInit_exit_error_1;
     }
     controllerMainInfo.mmap_start = mmap_start;
@@ -104,25 +115,21 @@ int dataPresentationControllerInit(char* outFName,
                 goto dataPresentationControllerInit_exit_error_2;
     }
     controllerMainInfo.workers_qid = qid;
-    key_t semkey = ftok(IPC_PRIVATE, SEMAFORS_KEY );
-    int sem = semget( semkey , 8 , IPC_CREAT | 0644);
+    //key_t semkey = ftok(IPC_PRIVATE, SEMAFORS_KEY );
+    int sem = semget( IPC_PRIVATE , 8 , IPC_CREAT | 0666);
         if ( sem == -1 ) {
                 LOGMESG(LOG_ERROR,"semget");
                 goto dataPresentationControllerInit_exit_error_2;
         } 
     controllerMainInfo.sem = sem;
-    struct sembuf sops[3]; 
-    sem_change_ptr(sops, S_TAKE_NEXT_FILE , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
-    sem_change_ptr(sops+2, S_WRITE_TO_OUT , NUMBER_OF_COMPRESSORS, SEM_UNDO); //allow for only one process to be in the TAKE_NEXT_FILE function
-    semop( controllerMainInfo.sem , sops, 3);
-    if ( NUMBER_OF_COMPRESSORS > 1){
-        sem_change_ptr(sops, S_TAKE_NEXT_FILE , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-        sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-        sem_change_ptr(sops+2, S_WRITE_TO_OUT , 1-NUMBER_OF_COMPRESSORS, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-        semop( controllerMainInfo.sem , sops, 3);
-    }
-    
+    struct sembuf sops[4]; 
+    //need semundo
+    sem_change_ptr(sops, S_TAKE_NEXT_FILE , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+2, S_WRITE_TO_OUT , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops+3, S_PMALLOC , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    semop( controllerMainInfo.sem , sops, 4);
+
     fileList firstStructure;
     firstStructure.count = 0;
     firstStructure.nextFLOffset = 0;
@@ -142,24 +149,24 @@ int dataPresentationControllerInit(char* outFName,
 
 int compressionPerform(){
     int rc;
-    pthread_t workerThreadId[NUMBER_OF_WORKERS];
-    pthread_t compressorThreadId[NUMBER_OF_COMPRESSORS];
-    int ID[NUMBER_OF_COMPRESSORS];
+    pthread_t workerThreadId[controllerMainInfo.number_of_workers];
+    pthread_t compressorThreadId[controllerMainInfo.number_of_scaners];
+    int ID[controllerMainInfo.number_of_scaners];
     int i;
     
-    for ( i = 0; i < NUMBER_OF_WORKERS ; i++){
+    for ( i = 0; i < controllerMainInfo.number_of_workers ; i++){
         rc = pthread_create(&workerThreadId[i] , (void*) NULL, pthreadMainLoop, (void*) NULL);
     }
-    for ( i = 0; i < NUMBER_OF_COMPRESSORS ; i++){
+    for ( i = 0; i < controllerMainInfo.number_of_scaners ; i++){
         ID[i] = TYPE_WORKER + 1 + i;
         rc = pthread_create(&compressorThreadId[i] , (void*) NULL, controllerCompress, (void*) &ID[i]);
     }
-    for ( i = 0; i < NUMBER_OF_COMPRESSORS ; i++){
+    for ( i = 0; i < controllerMainInfo.number_of_scaners ; i++){
         rc = pthread_join(compressorThreadId[i], NULL);
     }
     LOGMESG(LOG_INFO, "Closing messages");
     msgctl( controllerMainInfo.workers_qid, IPC_RMID, NULL); 
-    for ( i = 0; i < NUMBER_OF_WORKERS ; i++){
+    for ( i = 0; i < controllerMainInfo.number_of_workers ; i++){
         rc = pthread_join(workerThreadId[i], NULL);
     }
     munmap( controllerMainInfo.mmap_start, controllerMainInfo.mmap_size);
@@ -184,14 +191,25 @@ int threadDoCompression(){
     giveInfoMesg(&mesgInfo); // controller must free this memory
     return 0;
 }
-
+ 
 void* controllerCompress(void* ID){
+    struct sembuf sops[2];
+
     int controllerID = *((int*) ID);
     while( 1)
-    {
+    { 
         fInfoForCompressor nextFile ;
+        LOGMESG(LOG_INFO, "Waiting for  S_TAKE_NEXT_FILE 0" );
+        sem_change_ptr(sops, S_TAKE_NEXT_FILE , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+1, S_TAKE_NEXT_FILE , 1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
+        if ( semop( controllerMainInfo.sem , sops, 2) !=0 )  LOGMESG(LOG_ERROR, "semop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        
         nextFile = takeNextFile(controllerMainInfo.files);
+            LOGMESG(LOG_INFO, "Waiting for  S_TAKE_NEXT_FILE -1" );
+            sem_change_ptr(sops, S_TAKE_NEXT_FILE , -1,SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
+            semop( controllerMainInfo.sem , sops, 1);
         if ( nextFile.valid == -1) {
+
             return;
         }
         if ( nextFile.valid == 1) {
@@ -228,6 +246,9 @@ int compressFileByChunks(int controllerID, fInfoForCompressor f_info){
             mesgInfo.controllerID = TYPE_WORKER;
             mesgInfo.number = sended;
             mesgInfo.from = controllerID;
+            size_t destLen = MAX_COMP_CHUNK_LEN;
+            mesgInfo.size_comp = destLen;
+            mesgInfo.data_comp = (char*) malloc( destLen + sizeof(fileChunk) );
             LOGMESG(LOG_INFO, "Sended number %lld fron id = %d", (long long int) sended, controllerID );
             giveInfoMesg( &mesgInfo );
             sended++;
@@ -262,8 +283,8 @@ int compressFileByChunks(int controllerID, fInfoForCompressor f_info){
     compressFileByChunks_exit_error_1:
         munmap( mmap_next_file, length);
     compressFileByChunks_exit_error_0:
-        return -1;
-}
+            return -1;
+} 
 
 int writeToOutByOffset(char* data, size_t size, size_t offset ){
     if ( offset + size > controllerMainInfo.mmap_size){
@@ -278,11 +299,10 @@ size_t writeToOut( char* data, size_t size ){
     LOGMESG(LOG_INFO, "Writing data to OUT size = %lld, p = %p", (long long) size, data  );
     //Need to be atomic    !!!!!!!!!!!!!!!!!!
     
-    struct sembuf sops[1];
-    sem_change_ptr(sops, S_WRITE_TO_OUT , -1, 0); //allow for only one process to be in the writeToOut function
-    semop( controllerMainInfo.sem , sops, 1);
-    
-    
+        struct sembuf sops[2];
+        sem_change_ptr(sops, S_WRITE_TO_OUT , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+1, S_WRITE_TO_OUT , 1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
+        semop( controllerMainInfo.sem , sops, 2);
     if (controllerMainInfo.mmap_size<controllerMainInfo.mmap_last_symbol+size){
         /*
         char *new_mapping = (char*) mremap((void*)controllerMainInfo.mmap_start, controllerMainInfo.mmap_size,
@@ -299,7 +319,7 @@ size_t writeToOut( char* data, size_t size ){
     size_t offset_to_new_data = controllerMainInfo.mmap_last_symbol;
     controllerMainInfo.mmap_last_symbol = controllerMainInfo.mmap_last_symbol + size;
     
-    sem_change_ptr(sops, S_WRITE_TO_OUT , 1, 0); //allow for only one process to be in the writeToOut function
+    sem_change_ptr(sops, S_WRITE_TO_OUT , -1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the writeToOut function
     semop( controllerMainInfo.sem , sops, 1);
     
     //Need to be atomic    !!!!!!!!!!!!!!!!!!
@@ -337,8 +357,8 @@ int giveInfoMesg(mesgStruct * mesgInfo){// controller must free this memory
 
 int compressChunk(mesgStruct * mesgInfo){
     LOGMESG( LOG_INFO , "compressChunk of pointer data_decomp %p" , mesgInfo->data_decomp);
-    size_t destLen = CHUNK*2 + 1000;
-    fileChunk * data_comp = (fileChunk *) malloc( destLen + sizeof(fileChunk) );
+    size_t destLen = mesgInfo->size_comp;
+    fileChunk * data_comp =(fileChunk *) mesgInfo->data_comp;
     data_comp->nextFileChunk = 0;
     char * data = ((char*)data_comp) + sizeof(fileChunk);
     mesgInfo->data_comp = (char*) data_comp;
@@ -399,10 +419,12 @@ int compressChunk(mesgStruct * mesgInfo){
      
 size_t addFileToFL(int fd,char* nextFileName , size_t* FLoffset  ){
     LOGMESG(LOG_INFO, "addFileToFL addDirToFL , offset = %lld", ( long long) *FLoffset);
-    struct sembuf sops[1];
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-    semop( controllerMainInfo.sem , sops, 1);
 
+    
+    struct sembuf sops[2];
+        sem_change_ptr(sops, S_ADD_FILE_TO_FL , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
+    semop( controllerMainInfo.sem , sops, 2);
     
     struct stat stbuf;
     fDescription *fDesc = (fDescription*) malloc( sizeof(fDescription) + strlen(nextFileName)+1 );
@@ -425,7 +447,7 @@ size_t addFileToFL(int fd,char* nextFileName , size_t* FLoffset  ){
     //FL->fDescriptionOffset[FL->count] = offset; // todo
     //FL->count = FL->count + 1;//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1,SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
     return offset;
 }
@@ -433,10 +455,11 @@ size_t addFileToFL(int fd,char* nextFileName , size_t* FLoffset  ){
 
 size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset ){
     LOGMESG(LOG_INFO, "addDirToFL , offset = %lld", ( long long) *FLoffset);
-    struct sembuf sops[1];
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
-    semop( controllerMainInfo.sem , sops, 1);
-
+    struct sembuf sops[2];
+        sem_change_ptr(sops, S_ADD_FILE_TO_FL , 0, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+        sem_change_ptr(sops+1, S_ADD_FILE_TO_FL , 1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
+    semop( controllerMainInfo.sem , sops, 2);
+    
     fileList FL_2; 
     FL_2.count = 0;
     FL_2.nextFLOffset = 0;
@@ -452,7 +475,7 @@ size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset ){
     addOffsetToFL( FL, FLoffset, offset);
     //FL->fDescriptionOffset[FL->count] = offset; // todo
     //FL->count = FL->count + 1;////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
-    sem_change_ptr(sops, S_ADD_FILE_TO_FL , 1, 0); //allow for only one process to be in the TAKE_NEXT_FILE function
+    sem_change_ptr(sops, S_ADD_FILE_TO_FL , -1, SEM_UNDO | IPC_NOWAIT); //allow for only one process to be in the TAKE_NEXT_FILE function
     semop( controllerMainInfo.sem , sops, 1);
     return offset_to_fl_2;
 }
@@ -475,7 +498,7 @@ int addOffsetToFL( fileList *FL ,size_t* FLoffset, size_t offset){
 }
 
     
-int dataRestore(char* filename){
+int dataRestore(char* ofname, char* filename){
     LOGMESG(LOG_INFO, "Data restore...");
     int fd;
     char* mmap_start;
@@ -503,10 +526,14 @@ int dataRestore(char* filename){
     
     struct stat st = {0};
     
-    if (stat("recovery", &st) == -1) {
-        rc = mkdir("recovery", 0777);
-        if ( rc != 0 ) LOGMESG(LOG_ERROR ,"Creating directory error");
-        rc = chdir("recovery");
+    if (stat(ofname, &st) == -1) {
+        rc = mkdir(ofname, 0777);
+        if ( rc != 0 ) {
+            LOGMESG(LOG_ERROR ,"Creating directory error");
+            perror("");
+            return -1;
+        }
+        rc = chdir(ofname);
         restoreFileList(FL);
         chdir("..");
     }else{
@@ -583,6 +610,7 @@ int restoreChunk( mesgStruct* mesg){
     char * data_decomp = (char*) malloc( CHUNK +1 ); // need to be free from outside
     if ( data_decomp == NULL){
         LOGMESG(LOG_ERROR, "restoreChunk, malloc");
+        return -1;
     }
     char * data_comp = (char*) &file_chunk[1];
     size_t numberOfCompressedBytes = file_chunk->size_of_data - sizeof(fileChunk);

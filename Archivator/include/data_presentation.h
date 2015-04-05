@@ -8,7 +8,6 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#define CHUNK ( 256*1024 )
 typedef struct{
     size_t size_of_data;
     size_t nextFileChunk;
@@ -65,7 +64,8 @@ typedef struct{
     char* mmap_start;
     size_t mmap_size;
     size_t mmap_last_symbol;
-    int nthread;
+    int number_of_scaners;
+    int number_of_workers;
     int compression_lvl; // 1-7
     char** files;
     int fd_out;
@@ -78,12 +78,11 @@ typedef struct{
 
 size_t addFileToFL(int fd,char* nextFileName, size_t* FLoffset  );
 size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset );
-int dataRestore(char* filename);
+int dataRestore(char* ofname, char* filename);
 size_t writeToOut( char* data, size_t size );
 int compressionPerform();
 int dataPresentationControllerInit(char* outFName,
-                                   int compression_lvl, int nthread, char ** files, char* progname);
-        
+                                   int compression_lvl, int number_of_scaners, int number_of_workers, char ** files, char* progname);
 
 
 #endif // _ARCHIVATOR_DATA_PRESENTATION_
