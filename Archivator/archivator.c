@@ -38,11 +38,13 @@ int main(int argc, char** argv){
         if ( (strcmp(argv[i], PREFIX_FOR_number_of_scaners) == 0) && i+1<argc )  /* Process optional arguments. */
         {
             sscanf(argv[++i],"%d",&number_of_scaners );
+            LOGMESG(LOG_INFO, "number_of_scaners = %d", number_of_scaners);
             continue;
         }
         if ( (strcmp(argv[i], PREFIX_FOR_number_of_workers) == 0) && i+1<argc )  /* Process optional arguments. */
         {
             sscanf(argv[++i],"%d",&number_of_workers );
+            LOGMESG(LOG_INFO, "number_of_workers = %d", number_of_workers);
             continue;
         }
         if ( (strcmp(argv[i], PREFIX_FOR_number_of_processes) == 0) && i+1<argc )  /* Process optional arguments. */
@@ -70,7 +72,7 @@ int main(int argc, char** argv){
         if ( strcmp(argv[i], PREFIX_FOR_show_help) == 0 ){
             printHelp();
             continue;
-        }
+        } 
         if ( current_number_of_input_files < MAXIMAL_INPUT_FILES){
             files[current_number_of_input_files++] = argv[i];
             LOGMESG(LOG_INFO, "File process: %s",  files[current_number_of_input_files-1]);

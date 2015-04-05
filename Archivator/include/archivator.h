@@ -10,7 +10,7 @@
 #define CHUNK ( 256*1024 )
 #define MAX_COMP_CHUNK_LEN ( CHUNK*2 + 1000 )
 
-#define FORA_IN_CHUNKS 10
+#define FORA_IN_CHUNKS 14
 #define NUMBER_OF_WORKERS 10
 #define NUMBER_OF_SCANERS 6
 #define MAX_FILE_LENGTH 80000000000llu
@@ -24,7 +24,6 @@
 #define S_ADD_FILE_TO_FL        1
 #define S_WRITE_TO_OUT          2 
 #define S_PMALLOC               3 
-
 
 #include <sys/ipc.h>
 #include <sys/msg.h>

@@ -2,26 +2,23 @@
 
 #include "archivator.h"
 
-#include "scaner.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <pthread.h>
+#include <unistd.h> 
+#include <stddef.h>
+#include <errno.h>
+
+#include <sys/types.h> 
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
-#include <stddef.h>
-#include <sys/mman.h>
-#include "zlib.h"
-#include <assert.h> 
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/sem.h>
-#include <sys/shm.h>
+#include <sys/mman.h>
+
 #include <dirent.h> 
 #include <libgen.h>
 
@@ -84,7 +81,7 @@ fInfoForCompressor takeNextFile(char** names){
     
     fd = open( new_name , O_RDONLY);
     if ( fd == -1 ){
-        LOGMESG(LOG_ERROR, "opening next file name");
+        LOGMESG(LOG_ERROR, "opening next file name %s", new_name);
         goto takeNextFile_exit_error_1;
     }
     size_t offset = addFileToFL(fd, basename(new_name) , &fileIterInfo.offsetToRootFL);

@@ -1,52 +1,32 @@
 #define DEBUG
 
 #include "archivator.h"
+#include "zlib.h"
 
-
-#include "scaner.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <sys/types.h> 
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h> 
 #include <pthread.h>
+#include <stddef.h>
+#include <assert.h> 
+#include <errno.h>
+
+#include <sys/types.h> 
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
-#include <stddef.h>
-#include <sys/mman.h>
-#include "zlib.h"
-#include <assert.h> 
-
-#include <errno.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/sem.h>
-#include <sys/shm.h>
-
-#include <sys/sem.h>
-#include <stdio.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/shm.h>
-#include <string.h>
-#include <sys/ipc.h>
-
+#include <sys/mman.h>
 
 void* pthreadMainLoop(void*);
 void* controllerCompress(void* ID);
 size_t writeToOut( char* data, size_t size );
 
-
 static controllerMainStruct controllerMainInfo; 
-
-
-
-
 
 int sem_change_ptr(struct sembuf *sops, short num , short value , short flag)//helps for semaphoring
 //Ptr, number of semaphore, value to encrease, flags
@@ -119,6 +99,7 @@ int dataPresentationControllerInit(char* outFName,
     int sem = semget( IPC_PRIVATE , 8 , IPC_CREAT | 0666);
         if ( sem == -1 ) {
                 LOGMESG(LOG_ERROR,"semget");
+                perror("");
                 goto dataPresentationControllerInit_exit_error_2;
         } 
     controllerMainInfo.sem = sem;
@@ -152,30 +133,39 @@ int compressionPerform(){
     pthread_t workerThreadId[controllerMainInfo.number_of_workers];
     pthread_t compressorThreadId[controllerMainInfo.number_of_scaners];
     int ID[controllerMainInfo.number_of_scaners];
+    int IDw[controllerMainInfo.number_of_workers];
     int i;
-    
-    for ( i = 0; i < controllerMainInfo.number_of_workers ; i++){
-        rc = pthread_create(&workerThreadId[i] , (void*) NULL, pthreadMainLoop, (void*) NULL);
+      
+    for ( i = 0; i < controllerMainInfo.number_of_workers ; i++){ 
+        LOGMESG(LOG_INFO,"creating worker %d\n", i);
+        IDw[i] = i;
+        rc = pthread_create(&workerThreadId[i] , (void*) NULL, pthreadMainLoop, (void*) &IDw[i]);
     }
     for ( i = 0; i < controllerMainInfo.number_of_scaners ; i++){
         ID[i] = TYPE_WORKER + 1 + i;
+        LOGMESG(LOG_INFO,"creating controller %d\n", i);
         rc = pthread_create(&compressorThreadId[i] , (void*) NULL, controllerCompress, (void*) &ID[i]);
     }
     for ( i = 0; i < controllerMainInfo.number_of_scaners ; i++){
         rc = pthread_join(compressorThreadId[i], NULL);
+        LOGMESG(LOG_INFO,"closing controller %d\n", i);
     }
     LOGMESG(LOG_INFO, "Closing messages");
     msgctl( controllerMainInfo.workers_qid, IPC_RMID, NULL); 
     for ( i = 0; i < controllerMainInfo.number_of_workers ; i++){
         rc = pthread_join(workerThreadId[i], NULL);
+        LOGMESG(LOG_INFO,"closing controller %d\n", i);
     }
     munmap( controllerMainInfo.mmap_start, controllerMainInfo.mmap_size);
     ftruncate( controllerMainInfo.fd_out, controllerMainInfo.mmap_last_symbol);
     close( controllerMainInfo.fd_out);
 }
 
-void* pthreadMainLoop( void* params){
-    while( threadDoCompression() == 0 ){};
+void* pthreadMainLoop( void* ID){
+    int workerID = *((int*) ID);
+    while( threadDoCompression() == 0 ){
+        LOGMESG(LOG_INFO, "Worker # %d", workerID );
+    };
     return ;
 }
 
@@ -238,6 +228,7 @@ int compressFileByChunks(int controllerID, fInfoForCompressor f_info){
     size_t number_of_cicles = 0;
     mesgStack * stack = mesgStackInit();
     while ( next_receiving*CHUNK < length ){
+        LOGMESG(LOG_INFO, "Controller sending work" );
         if ( sended*CHUNK < length){
             mesgStruct mesgInfo;
             mesgInfo.size_decomp = (length - sended*CHUNK < CHUNK) ? length - sended*CHUNK : CHUNK;
@@ -258,7 +249,9 @@ int compressFileByChunks(int controllerID, fInfoForCompressor f_info){
             if (received * CHUNK<length)
             {
                 mesgInfo = (mesgStruct*) malloc(sizeof(mesgStruct));
+                LOGMESG(LOG_INFO, "Controller takeing work" );
                 takeInfoMesg(mesgInfo , controllerID );
+                LOGMESG(LOG_INFO, "Controller taked work" );
                 LOGMESG(LOG_INFO, "->Recieved number %lld, size = %d,  p = %p", (long long int) mesgInfo->number, (int)mesgInfo->size_comp  , mesgInfo);
                 mesgStackAdd( stack, mesgInfo);
             }
@@ -323,7 +316,7 @@ size_t writeToOut( char* data, size_t size ){
     semop( controllerMainInfo.sem , sops, 1);
     
     //Need to be atomic    !!!!!!!!!!!!!!!!!!
-    memcpy( controllerMainInfo.mmap_start + offset_to_new_data, data, size);
+    memcpy( controllerMainInfo.mmap_start + offset_to_new_data, data, size);// thread safe?
     return offset_to_new_data;
 }
  
