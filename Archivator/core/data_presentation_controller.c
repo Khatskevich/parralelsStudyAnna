@@ -445,7 +445,7 @@ size_t addFileToFL(int fd,char* nextFileName , size_t* FLoffset  ){
     return offset;
 }
 
-
+// f
 size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset ){
     LOGMESG(LOG_INFO, "addDirToFL , offset = %lld", ( long long) *FLoffset);
     struct sembuf sops[2];
@@ -473,6 +473,7 @@ size_t addDirToFL(int fd, char* nextDirName , size_t* FLoffset ){
     return offset_to_fl_2;
 }
 
+//changes File fist pointer to the new, if necessary
 int addOffsetToFL( fileList *FL ,size_t* FLoffset, size_t offset){
     size_t offset_to_fl_2;
     if ( FL->count == NUMDER_OF_FILES_IN_LIST ){

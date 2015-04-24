@@ -12,6 +12,7 @@ static char* PREFIX_FOR_number_of_processes = "-np";
 static char* PREFIX_FOR_compression_lvl = "-lvl";
 static char* PREFIX_FOR_out_f_name = "-of";
 static char* PREFIX_FOR_decompress = "-d";
+static char* PREFIX_FOR_log_lvl_all = "-v";
 
 void printHelp(){
             printf("archivator usage:\n");
@@ -35,6 +36,8 @@ int main(int argc, char** argv){
     char* files[MAXIMAL_INPUT_FILES+1];
     int current_number_of_input_files = 0;
     int decompress = 0;
+    int log_lvl = LOG_ERROR;
+    
     
     for (i = 1; i < argc; i++)  /* Skip argv[0] (program name). */
     {
@@ -66,6 +69,11 @@ int main(int argc, char** argv){
             decompress = 1;
             continue;
         }
+        if ( strcmp(argv[i], PREFIX_FOR_log_lvl_all) == 0 )  /* Process optional arguments. */
+        {
+            log_lvl = LOG_ALL;
+            continue;
+        }
         if ( (strcmp(argv[i], PREFIX_FOR_out_f_name) == 0) && i+1<argc )  /* Process optional arguments. */
         {
             out_f_name = argv[++i] ;
@@ -82,6 +90,7 @@ int main(int argc, char** argv){
             continue;
         }
     }
+    logChangeLvl(log_lvl);
     files[current_number_of_input_files] = NULL;
     if ( number_of_scaners == 0){
         number_of_scaners = NUMBER_OF_SCANERS;
