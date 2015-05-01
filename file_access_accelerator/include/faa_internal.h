@@ -1,6 +1,6 @@
 #ifndef _FAA_INTERNAL_
 #define _FAA_INTERNAL_
-
+#define DEBUG
 #include "log.h"
 #include "faa_data_structure.h"
 #include "faa_cache.h"

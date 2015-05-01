@@ -87,14 +87,16 @@ int fast_cache_init( size_t block_size, size_t cache_size, int compression_level
         goto fast_cache_init_exit_error_1;
     }
     
-    for( i = 0 ; i < MAXIMAL_NUMBER_OF_PRIORITIES; i++){
+    for( i = 0 ; i < fastCacheMainInfo.number_of_places; i++){
         if ( i == 0){
             fastCacheMainInfo.freSpaceLastElement = (FreeSpaceStack*) malloc(sizeof(FreeSpaceStack));
             fastCacheMainInfo.freSpaceLastElement->prev = NULL;
+            fastCacheMainInfo.freSpaceLastElement->anumber = i;
         }else{
             FreeSpaceStack* temp = fastCacheMainInfo.freSpaceLastElement;
             fastCacheMainInfo.freSpaceLastElement = (FreeSpaceStack*) malloc(sizeof(FreeSpaceStack));
             fastCacheMainInfo.freSpaceLastElement->prev = temp;
+            fastCacheMainInfo.freSpaceLastElement->anumber = i;
         }
         if (fastCacheMainInfo.freSpaceLastElement == NULL ){
             LOGMESG( LOG_ERROR, "Error while malloc" );
@@ -111,6 +113,45 @@ int fast_cache_init( size_t block_size, size_t cache_size, int compression_level
         return -1;
 }
 
+int fast_cache_deinit(){
+    size_t i;
+    if ( fastCacheMainInfo.lpices_by_priorities != NULL){
+        for( i = 0 ; i < MAXIMAL_NUMBER_OF_PRIORITIES; i++){
+            if (fastCacheMainInfo.lpices_by_priorities[i].next != NULL){
+                PiceInList* next = fastCacheMainInfo.lpices_by_priorities[i].next; 
+                while ( next != NULL){
+                    PiceInList * temp_next;
+                    temp_next = next;
+                    next = next->next;
+                    free( temp_next );
+                }
+            }
+        }
+        free(fastCacheMainInfo.lpices_by_priorities); 
+        fastCacheMainInfo.lpices_by_priorities = NULL;
+    }
+
+    fastCacheMainInfo.apices = (PiceInArray*) malloc( sizeof( PiceInArray)*fastCacheMainInfo.number_of_places );
+    if ( fastCacheMainInfo.apices != NULL){
+        for ( i == 0; i < fastCacheMainInfo.number_of_places; i++){
+            if ( fastCacheMainInfo.apices[i].data != NULL ){
+                free(fastCacheMainInfo.apices[i].data);
+            }
+        }
+        free( fastCacheMainInfo.apices );
+        fastCacheMainInfo.apices = NULL;
+    }
+    
+    FreeSpaceStack* lastElement = fastCacheMainInfo.freSpaceLastElement;
+    while ( lastElement != NULL){
+        FreeSpaceStack* temp_lastElement;
+        temp_lastElement = lastElement;
+        lastElement = lastElement->prev;
+        free( temp_lastElement);
+    }
+    return 0;
+}
+
 
 int fast_store_data_to_cache( void** data, int priority, FaaDataStruct* faaDataInfo ){
     int rc;
@@ -122,13 +163,12 @@ int fast_store_data_to_cache( void** data, int priority, FaaDataStruct* faaDataI
     apice->lpice=lpice;
     apice->priority=priority;
     apice->data_is_compressed = 1;
-    apice->data = *data;
     apice->buffer_for_flushing = faaDataInfo->data;
     apice->offset = faaDataInfo->offset;
-    *data = apice;
-    void* temp_data = cache_compress(data, &(apice->size) ,fastCacheMainInfo.block_size, fastCacheMainInfo.compression_level); // need to be compressed
+    void* temp_data = cache_compress(*data, &(apice->size) ,fastCacheMainInfo.block_size, fastCacheMainInfo.compression_level); // need to be compressed
     free(*data);
-    *data = temp_data;
+    *data = apice;
+    apice->data = temp_data;
     return 0;
 }
 int fast_get_data_from_cache( void** data ){
@@ -151,7 +191,7 @@ int fast_remove_data_from_cache( void** data ){
     FaaDataStruct faaDataInfo;
     faaDataInfo.data = DATA_FLUSHING_FROM_CACHE;
     faaDataInfo.offset = apice->offset;
-    faa_data_dec_ref( &faaDataInfo );
+    //faa_data_dec_ref( &faaDataInfo );
     return 0;
 }
 
@@ -181,6 +221,7 @@ int fast_cache_release_free_apice_number( size_t anumber ){
     FreeSpaceStack* temp = (FreeSpaceStack*) malloc( sizeof(FreeSpaceStack));
     temp->prev = fastCacheMainInfo.freSpaceLastElement;
     fastCacheMainInfo.freSpaceLastElement = temp;
+    fastCacheMainInfo.freSpaceLastElement->anumber = anumber;
     return 0;
 }
 

@@ -18,7 +18,7 @@ void* faa_data_inc_ref(FaaDataStruct* faaDataInfo);
 
 int faa_data_dec_ref(FaaDataStruct* faaDataInfo);
 
-int faa_data_deinit();
+int faa_data_deinit(FaaDataStruct* faaDataInfo);
 
 int faa_data_flush( FaaDataStruct* faaDataInfo );
 

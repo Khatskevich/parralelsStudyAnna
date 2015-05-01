@@ -8,6 +8,7 @@
 
 
 int faa_cache_init();
+int faa_cache_deinit();
 int faa_store_data_to_cache( void** data, int priority, FaaDataStruct* faaDataInfo );
 int faa_get_data_from_cache( void** data );
 int faa_remove_data_from_cache( void** data );

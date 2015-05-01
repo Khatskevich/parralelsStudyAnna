@@ -34,30 +34,35 @@ typedef struct{
 typedef struct{
     LastLevelHashHeaderStruct * lastLevelHashHeaderInfo;
     size_t block_size;
-    size_t file_size;    
+    size_t file_size;  
 } HashMainStruct;
 
-HashMainStruct hashMainInfo;
+HashMainStruct hashMainInfo ;
 
 
 void* last_level_hash_inc_ref( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo, FaaDataStruct* faaDataInfo);
 LastLevelHashHeaderStruct * last_level_hash_header_init( size_t block_size , size_t size );
 
 int faa_hash_init( size_t block_size, size_t file_size){
+    LOGMESG(LOG_INFO ,"FAA HASH init");
     hashMainInfo.file_size = file_size;
     hashMainInfo.block_size = block_size;
     hashMainInfo.lastLevelHashHeaderInfo = last_level_hash_header_init( block_size, file_size );
     if ( hashMainInfo.lastLevelHashHeaderInfo == NULL){
+        LOGMESG(LOG_ERROR, "hashMainInfo.lastLevelHashHeaderInfo == NULL");
         return -1;
     }
+    return 0;
 }
 
 
 LastLevelHashHeaderStruct * last_level_hash_header_init( size_t block_size , size_t size )
 {
+    LOGMESG(LOG_INFO, "last_level_hash_header_init");
     size_t i = 0;
     size_t number_of_pices = size/block_size + 1;
     LastLevelHashHeaderStruct* lastLevelHashHeaderInfo;
+    LOGMESG(LOG_INFO, "Trying to malloc %lld bytes", (long long int) sizeof(LastLevelHashHeaderStruct) + sizeof( LastLevelHashPiceStruct ) * ( number_of_pices ) );
     lastLevelHashHeaderInfo = (LastLevelHashHeaderStruct*) malloc( sizeof(LastLevelHashHeaderStruct) + sizeof( LastLevelHashPiceStruct ) * ( number_of_pices ) );
     if ( lastLevelHashHeaderInfo == NULL){
         LOGMESG(LOG_ERROR, "Malloc");
@@ -71,6 +76,8 @@ LastLevelHashHeaderStruct * last_level_hash_header_init( size_t block_size , siz
         lastLevelHashHeaderInfo->pices[i].referenceCounter = -1;
         lastLevelHashHeaderInfo->pices[i].maxReferenceCounter = 0;
     }
+    LOGMESG(LOG_INFO ,"FAA HASH initialised successefully");
+    
     return lastLevelHashHeaderInfo;
 }
 
@@ -82,8 +89,8 @@ int faa_hash_dec_ref(FaaDataStruct* faaDataInfo){
     return last_level_hash_dec_ref( hashMainInfo.lastLevelHashHeaderInfo , faaDataInfo);
 }
 
-int faa_hash_deinit(){
-    return last_level_hash_deinit(hashMainInfo.lastLevelHashHeaderInfo);
+int faa_hash_deinit( FaaDataStruct* faaDataInfo ){
+    return last_level_hash_deinit(hashMainInfo.lastLevelHashHeaderInfo, faaDataInfo);
 }
 
 int faa_hash_flush( FaaDataStruct* faaDataInfo ){
@@ -91,6 +98,7 @@ int faa_hash_flush( FaaDataStruct* faaDataInfo ){
 }
 
 void* last_level_hash_inc_ref( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo, FaaDataStruct* faaDataInfo){
+    LOGMESG(LOG_INFO ,"FAA HASH inc ref");
     size_t number = faaDataInfo->offset / hashMainInfo.block_size;
     LastLevelHashPiceStruct* pice = lastLevelHashHeaderInfo->pices + number;
     if ( pice->referenceCounter < 0 ){
@@ -119,6 +127,7 @@ void* last_level_hash_inc_ref( LastLevelHashHeaderStruct* lastLevelHashHeaderInf
 
 
 int last_level_hash_dec_ref( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo, FaaDataStruct* faaDataInfo){
+    LOGMESG(LOG_INFO ,"FAA HASH dec ref");
     size_t number = faaDataInfo->offset / hashMainInfo.block_size;
     LastLevelHashPiceStruct* pice = lastLevelHashHeaderInfo->pices + number;
     
@@ -149,15 +158,17 @@ int last_level_hash_dec_ref( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo,
     last_level_hash_dec_ref_exit_error_0:
         return -1;
 }
-int last_level_hash_deinit( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo ){
+int last_level_hash_deinit( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo , FaaDataStruct* faaDataInfo_){
+    LOGMESG(LOG_INFO ,"FAA HASH deinit");
     size_t i = 0;
     FaaDataStruct faaDataInfo;
     faaDataInfo.offset = FAA_FLUSH_ALL; 
+    faaDataInfo.data = faaDataInfo_->data;
     int rc = last_level_hash_flush( lastLevelHashHeaderInfo, &faaDataInfo);
     for (i = 0; i < lastLevelHashHeaderInfo->numberOfPices; i++ ){
         LastLevelHashPiceStruct * pice = &lastLevelHashHeaderInfo->pices[i];
         if ( pice->referenceCounter == 0 ){
-            faa_remove_data_from_cache( pice->data);
+            faa_remove_data_from_cache( &pice->data);
         } else if ( pice->referenceCounter > 0 ){
             free( pice->data);
         }
@@ -166,13 +177,14 @@ int last_level_hash_deinit( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo )
     
 }
 int last_level_hash_flush( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo, FaaDataStruct* faaDataInfo){
+    LOGMESG(LOG_INFO ,"FAA HASH flush, offset = %llx", faaDataInfo->offset );
     int rc;
     if ( faaDataInfo->offset == FAA_FLUSH_ALL ){
         size_t i = 0;
         for (i = 0; i < lastLevelHashHeaderInfo->numberOfPices; i++ ){
             FaaDataStruct faaDataInfoTemp;
             faaDataInfoTemp.data = (void*)((char*) faaDataInfo->data + i*hashMainInfo.block_size );
-            faaDataInfoTemp.offset = faaDataInfo->offset + i*hashMainInfo.block_size ;
+            faaDataInfoTemp.offset = i*hashMainInfo.block_size ;
             LastLevelHashPiceStruct* pice = lastLevelHashHeaderInfo->pices + i;
             rc = last_level_hash_flush_pice( pice, &faaDataInfoTemp);
             if ( rc < 0){
@@ -188,8 +200,9 @@ int last_level_hash_flush( LastLevelHashHeaderStruct* lastLevelHashHeaderInfo, F
 }
 
 int last_level_hash_flush_pice( LastLevelHashPiceStruct* pice, FaaDataStruct* faaDataInfo ){
+    LOGMESG(LOG_INFO ,"FAA HASH flush_pice , offset = %llx", faaDataInfo->offset );
     if ( pice->referenceCounter == 0){
-        return faa_flush_data_from_cache(pice->data, faaDataInfo );
+        return faa_flush_data_from_cache(&pice->data, faaDataInfo );
     }else if( pice->referenceCounter > 0 ){
         memcpy( faaDataInfo->data, pice->data, hashMainInfo.block_size );
     }

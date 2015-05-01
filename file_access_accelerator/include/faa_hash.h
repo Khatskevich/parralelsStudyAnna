@@ -10,7 +10,7 @@ void* faa_hash_inc_ref(FaaDataStruct* faaDataInfo);
 
 int faa_hash_dec_ref(FaaDataStruct* faaDataInfo);
 
-int faa_hash_deinit();
+int faa_hash_deinit(FaaDataStruct* faaDataInfo );
 
 int faa_hash_flush( FaaDataStruct* faaDataInfo );
 

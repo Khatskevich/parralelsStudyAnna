@@ -2,7 +2,7 @@ PROGPATH=../
 INCLUDES=$(PROGPATH)/include
 TOOLSPATH=$(PROGPATH)/tools
 CORE=$(PROGPATH)/core
-CFLAGS=-I$(INCLUDES) -O3 -g
+CFLAGS=-I$(INCLUDES) -O3
 
 all: test run_test
 

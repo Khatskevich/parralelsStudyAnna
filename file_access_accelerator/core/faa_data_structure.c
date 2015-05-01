@@ -13,8 +13,8 @@ int faa_data_dec_ref(FaaDataStruct* faaDataInfo){
     return faa_hash_dec_ref(faaDataInfo);
 }
 
-int faa_data_deinit(){
-    return faa_hash_deinit();
+int faa_data_deinit(FaaDataStruct* faaDataInfo ){
+    return faa_hash_deinit( faaDataInfo );
 }
 
 int faa_data_flush( FaaDataStruct* faaDataInfo ){
